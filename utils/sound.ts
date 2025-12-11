@@ -2,7 +2,7 @@
 
 let audioCtx: AudioContext | null = null;
 let bgmInterval: number | null = null;
-let bgmGain: GainNode | null = null;
+let audioUnlocked = false;
 
 const initAudio = () => {
   if (!audioCtx) {
@@ -12,6 +12,29 @@ const initAudio = () => {
     audioCtx.resume();
   }
   return audioCtx;
+};
+
+// iOS Safari requires AudioContext to be unlocked by a user gesture
+// Call this function on first user interaction (tap/click)
+export const unlockAudio = () => {
+  if (audioUnlocked) return;
+
+  const ctx = initAudio();
+
+  // Create a silent buffer and play it to unlock audio
+  const buffer = ctx.createBuffer(1, 1, 22050);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start(0);
+
+  // Also resume if suspended
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+
+  audioUnlocked = true;
+  console.log('Audio unlocked for iOS');
 };
 
 // Play a short "pluck" sound (Marimba-ish)
@@ -73,10 +96,6 @@ export const stopBackgroundMusic = () => {
   if (bgmInterval) {
     clearInterval(bgmInterval);
     bgmInterval = null;
-  }
-  if (bgmGain) {
-    try { bgmGain.disconnect(); } catch (e) {}
-    bgmGain = null;
   }
 };
 

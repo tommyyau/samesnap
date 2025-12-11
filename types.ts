@@ -25,6 +25,7 @@ export enum Difficulty {
 export enum CardDifficulty {
   EASY = 'EASY',     // Orderly, fixed positions
   MEDIUM = 'MEDIUM', // Chaotic, random sizes/positions
+  HARD = 'HARD',     // Chaotic layout + tricky similar-looking symbols
 }
 
 export interface Player {
