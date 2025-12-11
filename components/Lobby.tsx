@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Difficulty, GameConfig, CardDifficulty } from '../types';
 import { unlockAudio } from '../utils/sound';
+import { Smartphone, Zap } from 'lucide-react';
 
 interface LobbyProps {
   onStart: (config: GameConfig) => void;
@@ -11,6 +12,19 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
+  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+
+  // Window resize listener for portrait detection
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Check if mobile portrait
+  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,9 +39,29 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center p-4">
-      
-      {/* Header Section - Always at top, centered */}
+    <>
+      {/* Mobile Portrait Orientation Warning */}
+      {isMobilePortrait && (
+        <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+          <div className="relative mb-8">
+            <Smartphone size={64} className="animate-spin-slow" />
+            <div className="absolute top-0 right-0 -mr-4 -mt-2">
+              <Zap className="text-yellow-400 animate-pulse" size={24}/>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
+          <p className="text-indigo-200 mb-8 max-w-xs">
+            SameSnap is designed to be played in landscape mode for the best experience.
+          </p>
+          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
+            Rotate to continue
+          </div>
+        </div>
+      )}
+
+      <div className={`min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex flex-col items-center justify-center p-4 ${isMobilePortrait ? 'blur-sm' : ''}`}>
+
+        {/* Header Section - Always at top, centered */}
       <div className="text-center text-white mb-6 md:mb-8 shrink-0">
         <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight drop-shadow-md">
           SameSnap
@@ -160,7 +194,8 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
 
         </form>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
