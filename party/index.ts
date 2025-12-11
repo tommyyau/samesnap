@@ -5,10 +5,13 @@ import {
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
 import { generateDeck, SYMBOLS } from "../shared/gameLogic";
+import { CardDifficulty } from "../shared/types";
 
 const PENALTY_DURATION = 3000;
+const DEFAULT_TARGET_PLAYERS = 2;
 const ARBITRATION_WINDOW_MS = 100;
 const RECONNECT_GRACE_PERIOD = 60000;
+const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
 
 export default class SameSnapRoom implements Party.Server {
   private phase: RoomPhase = RoomPhase.WAITING;
@@ -29,6 +32,10 @@ export default class SameSnapRoom implements Party.Server {
     timeoutId: ReturnType<typeof setTimeout> | null;
   } | null = null;
   private disconnectedPlayers: Map<string, { player: ServerPlayer; disconnectedAt: number }> = new Map();
+
+  // Room timeout tracking
+  private roomExpiresAt: number | null = null;
+  private roomTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -71,6 +78,9 @@ export default class SameSnapRoom implements Party.Server {
       switch (msg.type) {
         case 'join':
           this.handleJoin(sender, msg.payload.playerName);
+          break;
+        case 'set_config':
+          this.handleSetConfig(sender, msg.payload.config);
           break;
         case 'start_game':
           this.handleStartGame(sender, msg.payload.config);
@@ -132,9 +142,20 @@ export default class SameSnapRoom implements Party.Server {
     };
 
     this.players.set(conn.id, player);
+
     if (isHost) {
       this.hostId = conn.id;
+
+      // Initialize default config so auto-start works immediately
+      this.config = {
+        cardDifficulty: CardDifficulty.EASY,
+        targetPlayers: DEFAULT_TARGET_PLAYERS,
+      };
+
       this.sendToPlayer(conn.id, { type: 'you_are_host', payload: {} });
+
+      // Start room timeout when first player joins
+      this.startRoomTimeout();
     }
 
     // Broadcast to others
@@ -145,6 +166,83 @@ export default class SameSnapRoom implements Party.Server {
 
     // Send full state to new player
     this.sendRoomState(conn.id);
+
+    // Check if we've reached target players and should auto-start
+    this.checkAutoStart();
+  }
+
+  private startRoomTimeout() {
+    if (this.roomTimeoutId) {
+      clearTimeout(this.roomTimeoutId);
+    }
+
+    this.roomExpiresAt = Date.now() + ROOM_TIMEOUT;
+    this.roomTimeoutId = setTimeout(() => {
+      this.handleRoomExpired();
+    }, ROOM_TIMEOUT);
+  }
+
+  private handleRoomExpired() {
+    if (this.phase !== RoomPhase.WAITING) return; // Don't expire if game started
+
+    // Notify all players
+    this.broadcastToAll({
+      type: 'room_expired',
+      payload: { reason: 'Room timed out - not enough players joined in time' }
+    });
+
+    // Close all connections
+    for (const conn of this.room.getConnections()) {
+      conn.close();
+    }
+  }
+
+  private checkAutoStart() {
+    if (this.phase !== RoomPhase.WAITING) return;
+    if (!this.config) return;
+
+    const targetPlayers = this.config.targetPlayers;
+    if (this.players.size >= targetPlayers && targetPlayers >= 1) {
+      // Cancel room timeout since we're starting
+      if (this.roomTimeoutId) {
+        clearTimeout(this.roomTimeoutId);
+        this.roomTimeoutId = null;
+      }
+      this.roomExpiresAt = null;
+
+      // Auto-start the game
+      this.startCountdown();
+    }
+  }
+
+  private handleSetConfig(conn: Party.Connection, config: MultiplayerGameConfig) {
+    const player = this.players.get(conn.id);
+    if (!player?.isHost) {
+      this.sendToPlayer(conn.id, {
+        type: 'error',
+        payload: { code: ERROR_CODES.NOT_HOST, message: 'Only host can set config' }
+      });
+      return;
+    }
+
+    if (this.phase !== RoomPhase.WAITING) {
+      this.sendToPlayer(conn.id, {
+        type: 'error',
+        payload: { code: ERROR_CODES.INVALID_STATE, message: 'Cannot change config after game started' }
+      });
+      return;
+    }
+
+    this.config = config;
+
+    // Broadcast config update to all players
+    this.broadcastToAll({
+      type: 'config_updated',
+      payload: { config }
+    });
+
+    // Check if we should auto-start now
+    this.checkAutoStart();
   }
 
   private handleStartGame(conn: Party.Connection, config: MultiplayerGameConfig) {
@@ -171,7 +269,14 @@ export default class SameSnapRoom implements Party.Server {
 
   private startCountdown() {
     this.phase = RoomPhase.COUNTDOWN;
-    let count = 3;
+    let count = 5;  // 5-4-3-2-1 countdown
+
+    // Cancel room timeout since game is starting
+    if (this.roomTimeoutId) {
+      clearTimeout(this.roomTimeoutId);
+      this.roomTimeoutId = null;
+    }
+    this.roomExpiresAt = null;
 
     const tick = () => {
       this.broadcastToAll({ type: 'countdown', payload: { seconds: count } });
@@ -428,6 +533,8 @@ export default class SameSnapRoom implements Party.Server {
       roundMatchedSymbolId: this.roundMatchedSymbolId,
       roundNumber: this.roundNumber,
       penaltyUntil: this.penalties.get(playerId),
+      roomExpiresAt: this.roomExpiresAt || undefined,
+      targetPlayers: this.config?.targetPlayers,
     };
 
     this.sendToPlayer(playerId, { type: 'room_state', payload: state });

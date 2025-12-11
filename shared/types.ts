@@ -68,7 +68,7 @@ export interface MatchAttempt {
 
 export interface MultiplayerGameConfig {
   cardDifficulty: CardDifficulty;
-  maxPlayers: number;
+  targetPlayers: number;  // How many players needed to auto-start (1-8)
 }
 
 export interface ClientRoomState {
@@ -85,6 +85,8 @@ export interface ClientRoomState {
   roundNumber: number;
   countdown?: number;
   penaltyUntil?: number;
+  roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
+  targetPlayers?: number;     // How many players needed to start
 }
 
 // Single-player types (keep existing)

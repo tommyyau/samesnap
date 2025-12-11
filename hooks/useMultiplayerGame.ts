@@ -14,9 +14,10 @@ interface UseMultiplayerGameOptions {
   playerName: string;
   onError?: (error: { code: string; message: string }) => void;
   onKicked?: () => void;
+  onRoomExpired?: (reason: string) => void;
 }
 
-export function useMultiplayerGame({ roomCode, playerName, onError, onKicked }: UseMultiplayerGameOptions) {
+export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, onRoomExpired }: UseMultiplayerGameOptions) {
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isHost, setIsHost] = useState(false);
@@ -113,23 +114,49 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked }: 
         break;
 
       case 'countdown':
-        setRoomState(prev => prev ? {
-          ...prev,
-          phase: RoomPhase.COUNTDOWN,
-          countdown: message.payload.seconds
-        } : null);
+        setRoomState(prev => {
+          // If we haven't received room_state yet, create a minimal state
+          // This handles the race condition when auto-start triggers immediately
+          if (!prev) {
+            return {
+              roomCode,
+              phase: RoomPhase.COUNTDOWN,
+              players: [],
+              config: null,
+              deckRemaining: 0,
+              centerCard: null,
+              yourCard: null,
+              roundNumber: 0,
+              countdown: message.payload.seconds,
+            };
+          }
+          return {
+            ...prev,
+            phase: RoomPhase.COUNTDOWN,
+            countdown: message.payload.seconds
+          };
+        });
         break;
 
       case 'round_start':
-        setRoomState(prev => prev ? {
-          ...prev,
-          phase: RoomPhase.PLAYING,
-          centerCard: message.payload.centerCard,
-          yourCard: message.payload.yourCard,
-          roundNumber: message.payload.roundNumber,
-          roundWinnerId: null,
-          roundMatchedSymbolId: null,
-        } : null);
+        setRoomState(prev => {
+          const baseState = prev || {
+            roomCode,
+            phase: RoomPhase.PLAYING,
+            players: [],
+            config: null,
+            deckRemaining: 0,
+          };
+          return {
+            ...baseState,
+            phase: RoomPhase.PLAYING,
+            centerCard: message.payload.centerCard,
+            yourCard: message.payload.yourCard,
+            roundNumber: message.payload.roundNumber,
+            roundWinnerId: null,
+            roundMatchedSymbolId: null,
+          };
+        });
         break;
 
       case 'round_winner':
@@ -175,17 +202,33 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked }: 
         setLatency(Date.now() - message.payload.clientTimestamp);
         break;
 
+      case 'config_updated':
+        setRoomState(prev => prev ? {
+          ...prev,
+          config: message.payload.config,
+          targetPlayers: message.payload.config.targetPlayers,
+        } : null);
+        break;
+
+      case 'room_expired':
+        onRoomExpired?.(message.payload.reason);
+        break;
+
       case 'error':
         onError?.(message.payload);
         break;
     }
-  }, [roomCode, onError, onKicked]);
+  }, [roomCode, onError, onKicked, onRoomExpired]);
 
   const attemptMatch = useCallback((symbolId: number) => {
     sendMessage({
       type: 'match_attempt',
       payload: { symbolId, clientTimestamp: Date.now() }
     });
+  }, [sendMessage]);
+
+  const setConfig = useCallback((config: MultiplayerGameConfig) => {
+    sendMessage({ type: 'set_config', payload: { config } });
   }, [sendMessage]);
 
   const startGame = useCallback((config: MultiplayerGameConfig) => {
@@ -213,6 +256,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked }: 
     isHost,
     latency,
     attemptMatch,
+    setConfig,
     startGame,
     leaveRoom,
     kickPlayer,
