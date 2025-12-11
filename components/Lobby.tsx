@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Difficulty, GameConfig, CardDifficulty } from '../types';
-import { unlockAudio } from '../utils/sound';
+import { unlockAudio, startBackgroundMusic } from '../utils/sound';
 import { Smartphone, Zap } from 'lucide-react';
 
 interface LobbyProps {
@@ -29,7 +29,10 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // Unlock audio on iOS - must happen in direct response to user gesture
+    // IMPORTANT: Both unlock AND startBackgroundMusic must be in the same gesture
+    // for iOS to allow audio playback
     unlockAudio();
+    startBackgroundMusic();
     onStart({
       playerName: name.trim() || 'Player 1',
       botCount,

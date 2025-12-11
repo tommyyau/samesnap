@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty } from '../types';
 import { generateDeck, findMatch, shuffle } from '../utils/gameLogic';
-import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound } from '../utils/sound';
+import { stopBackgroundMusic, playMatchSound, playErrorSound } from '../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../constants';
 import Card from './Card';
 import { Trophy, XCircle, Zap, Smartphone, Bot } from 'lucide-react';
@@ -51,9 +51,8 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
     // Use hard symbols for HARD card difficulty
     const symbols = config.cardDifficulty === CardDifficulty.HARD ? SYMBOLS_HARD : undefined;
     const deck = generateDeck(7, symbols);
-    
-    // Start Audio
-    startBackgroundMusic();
+
+    // Note: Audio is started in Lobby.tsx during user gesture (required for iOS)
 
     // Setup Players
     const newPlayers: Player[] = [];
