@@ -1,0 +1,57 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Commands
+
+```bash
+npm install        # Install dependencies
+npm run dev        # Start Vite dev server on port 3000
+npm run build      # Production build
+npm run preview    # Preview production build
+```
+
+Note: Requires `GEMINI_API_KEY` in `.env.local` (referenced in vite.config.ts but not currently used in the game code).
+
+## Architecture
+
+SameSnap is a Dobble/Spot It! style pattern recognition card game built with React 19, TypeScript, and Vite. Players race against bots to find the matching symbol between cards.
+
+### Core Game Flow
+
+`App.tsx` → Controls state between Lobby and Game screens
+- `Lobby.tsx` → Configuration: player name, bot count, difficulty, card layout
+- `Game.tsx` → Main game loop: deals cards, manages rounds, handles player/bot matches
+
+### Key Systems
+
+**Deck Generation** (`utils/gameLogic.ts`)
+- Uses projective plane mathematics (order N=7) to generate a 57-card deck
+- Mathematical guarantee: any two cards share exactly one common symbol
+- 8 symbols per card, 57 total unique symbols (from `constants.ts` EMOJIS array)
+
+**Card Layout** (`components/Card.tsx`)
+- `EASY`: One symbol centered, 7 arranged in a circle around it
+- `MEDIUM`: Physics-based relaxation algorithm that randomly sizes/positions symbols while preventing overlaps
+
+**Bot AI** (`Game.tsx`)
+- Bots scheduled via `setTimeout` with randomized delays based on difficulty
+- Difficulty controls reaction time range (EASY: 5-10s, MEDIUM: 3-7s, HARD: 1.5-4s)
+- Bots cleared and rescheduled on each new center card
+
+**Audio** (`utils/sound.ts`)
+- Web Audio API synthesizer - no audio files
+- Background music: procedural pentatonic melody
+- Sound effects: match sounds (different for human vs bots), error sounds
+
+### Type Definitions (`types.ts`)
+
+- `GameState`: LOBBY → PLAYING → ROUND_ANIMATION → GAME_OVER
+- `Difficulty`: Bot speed (EASY/MEDIUM/HARD)
+- `CardDifficulty`: Card layout style (EASY orderly / MEDIUM chaotic)
+- `CardData`: Card with array of `SymbolItem`
+- `Player`: Human or bot with hand, score, collected cards
+
+### Path Alias
+
+`@/*` maps to project root (configured in both tsconfig.json and vite.config.ts)

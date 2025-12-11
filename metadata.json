@@ -1,0 +1,5 @@
+{
+  "name": "SameSnap",
+  "description": "A fast-paced pattern recognition card game where you race against bots to match symbols between cards.",
+  "requestFramePermissions": []
+}
