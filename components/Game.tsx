@@ -27,13 +27,18 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
   // Responsive State
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  // Refs for bot timers
+  // Refs for bot timers and animation timer
   const botTimers = useRef<{ [key: string]: number }>({});
+  const animationTimer = useRef<number | null>(null);
 
   // Helper to clear timers
   const clearAllBotTimers = useCallback(() => {
     Object.values(botTimers.current).forEach((t) => clearTimeout(t as number));
     botTimers.current = {};
+    if (animationTimer.current !== null) {
+      clearTimeout(animationTimer.current);
+      animationTimer.current = null;
+    }
   }, []);
 
   // Window Resize Listener
@@ -172,7 +177,8 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
     setMessage(`${winner.name} found it!`);
 
     // 3. Wait 2 seconds before dealing next card
-    setTimeout(() => {
+    animationTimer.current = window.setTimeout(() => {
+      animationTimer.current = null;
       proceedToNextTurn(playerId, targetCenterCard);
     }, 2000);
   };
