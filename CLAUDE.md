@@ -69,7 +69,7 @@ SameSnap is a Dobble/Spot It! style pattern recognition card game built with Rea
 
 - `EMOJIS`: 67 emoji symbols (57 required + extras) - used for EASY/MEDIUM
 - `EMOJIS_HARD`: 57 visually similar themed symbols (fruits, sea creatures, insects, etc.) - used for HARD
-- `BOT_NAMES`: ['Holly', 'Sophie', 'Abi', 'Rob', 'Anthony', 'Tommy', 'Olinda', 'Kimberley', 'Alice']
+- `BOT_NAMES`: ['Holly', 'Sophie', 'Abi', 'Rob', 'Anthony', 'Tommy', 'Olinda', 'Kimberley', 'Alice', 'Chris']
 - `CARD_SIZE_*`: Predefined card sizes (LG: 320px, MD: 200px, SM: 100px)
 - `PENALTY_DURATION`: 3000ms penalty for wrong matches
 - `BOT_SPEEDS`: Reaction time ranges per difficulty
