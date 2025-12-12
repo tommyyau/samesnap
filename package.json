@@ -10,11 +10,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "deploy:party": "partykit deploy",
-    "test": "npm run test:logic && npm run test:multiplayer",
+    "test": "npm run test:logic && npm run test:multiplayer && npm run test:hook",
     "test:logic": "node test-game-logic.mjs",
     "test:multiplayer": "node test-multiplayer.mjs",
+    "test:hook": "node test-hook-state.mjs",
+    "test:ui": "node test-react-integration.mjs",
     "test:comprehensive": "node test-multiplayer-comprehensive.mjs",
-    "test:all": "npm run test:logic && npm run test:multiplayer && npm run test:comprehensive"
+    "test:stress": "node test-multiplayer-stress.mjs",
+    "test:all": "npm run test:logic && npm run test:multiplayer && npm run test:hook && npm run test:stress"
   },
   "dependencies": {
     "lucide-react": "^0.560.0",
