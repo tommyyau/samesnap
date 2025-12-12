@@ -438,7 +438,7 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
                      </div>
                    </div>
                    {!isWinner && (
-                     <span className="text-[9px] font-bold mt-1 text-slate-400 max-w-[50px] truncate">
+                     <span className="text-[9px] md:text-[10px] font-bold mt-1 text-slate-400 max-w-[65px] md:max-w-[80px] truncate">
                         {bot.name}
                      </span>
                    )}
