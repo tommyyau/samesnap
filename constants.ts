@@ -46,7 +46,7 @@ export const SYMBOLS_HARD: SymbolItem[] = EMOJIS_HARD.map((char, index) => ({
   name: `HardSymbol ${index}`
 }));
 
-export const BOT_NAMES = ['Holly', 'Sophie', 'Abby', 'Rob', 'Antony', 'Tommy'];
+export const BOT_NAMES = ['Holly', 'Sophie', 'Abby', 'Rob', 'Antony', 'Tommy', 'Olinda', 'Kimberley', 'Alice'];
 
 export const CARD_SIZE_LG = 320; // px
 export const CARD_SIZE_MD = 200; // px
