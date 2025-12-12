@@ -30,6 +30,8 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
   // Refs for bot timers and animation timer
   const botTimers = useRef<{ [key: string]: number }>({});
   const animationTimer = useRef<number | null>(null);
+  // Ref to track game state for race condition prevention in async callbacks
+  const gameStateRef = useRef<GameState>(GameState.PLAYING);
 
   // Helper to clear timers
   const clearAllBotTimers = useCallback(() => {
@@ -40,6 +42,11 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
       animationTimer.current = null;
     }
   }, []);
+
+  // Keep gameStateRef in sync with gameState for race condition prevention
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
 
   // Window Resize Listener
   useEffect(() => {
@@ -156,8 +163,9 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
   };
 
   const handleMatchFound = (playerId: string, targetCenterCard: CardData) => {
-    // Prevent multiple matches firing at once
-    if (gameState !== GameState.PLAYING) return;
+    // Prevent multiple matches firing at once - use ref to avoid stale closure race condition
+    // when multiple bot timers fire close together in the same render cycle
+    if (gameStateRef.current !== GameState.PLAYING) return;
 
     const winner = players.find(p => p.id === playerId);
     if (!winner || !winner.hand) return;
@@ -172,6 +180,8 @@ const Game: React.FC<GameProps> = ({ config, onExit }) => {
     // 2. Set Highlight State
     setMatchedSymbolId(matchSymbol?.id || null);
     setLastWinnerId(playerId);
+    // Update ref immediately to prevent race condition before React's async state update
+    gameStateRef.current = GameState.ROUND_ANIMATION;
     setGameState(GameState.ROUND_ANIMATION); // Pauses the game loop
     
     setMessage(`${winner.name} found it!`);
