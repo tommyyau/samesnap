@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameConfig, Player, CardData, SymbolItem, GameState } from '../../shared/types';
-import { generateDeck, findMatch } from '../../shared/gameLogic';
-import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound } from '../../utils/sound';
-import { BOT_SPEEDS, PENALTY_DURATION, CARD_SIZE_LG, CARD_SIZE_MD, CARD_SIZE_SM } from '../../constants';
+import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty } from '../../shared/types';
+import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
+import { stopBackgroundMusic, playMatchSound, playErrorSound } from '../../utils/sound';
+import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
 import Card from '../Card';
-import { Trophy, XCircle, User, Zap } from 'lucide-react';
+import { Trophy, XCircle, User, Zap, Smartphone } from 'lucide-react';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -24,6 +24,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Highlighting State
   const [matchedSymbolId, setMatchedSymbolId] = useState<number | null>(null);
 
+  // Responsive State
+  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+
   // Refs for bot timers
   const botTimers = useRef<{ [key: string]: number }>({});
 
@@ -33,13 +36,46 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     botTimers.current = {};
   }, []);
 
+  // Window Resize Listener
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Calculate responsive card size
+  const calculateCardSize = () => {
+    const { width, height } = dimensions;
+    const topBarHeight = 48;
+    const botRowHeight = 60;
+    const padding = 32;
+    const availableHeight = height - topBarHeight - botRowHeight - padding * 2;
+    const availableWidth = width - padding * 2;
+
+    // Cards should fit in available space with room for both
+    const heightConstraint = availableHeight * 0.6;
+    const widthConstraint = availableWidth * 0.35;
+
+    const cardSize = Math.min(heightConstraint, widthConstraint, 320);
+    return Math.max(150, cardSize);
+  };
+
+  const cardSize = calculateCardSize();
+  const botCardSize = Math.max(50, cardSize * 0.3);
+
+  // Check if mobile portrait
+  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
+
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
     clearAllBotTimers();
-    const deck = generateDeck();
+    // Use hard symbols for HARD card difficulty
+    const symbols = config.cardDifficulty === CardDifficulty.HARD ? SYMBOLS_HARD : undefined;
+    const deck = generateDeck(7, symbols);
 
-    // Start Audio
-    startBackgroundMusic();
+    // Note: Audio is started in Lobby.tsx during user gesture (required for iOS)
 
     // Setup Players
     const newPlayers: Player[] = [];
@@ -54,11 +90,17 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
       collectedCards: 0
     });
 
-    // Bots
+    // Bots - use human names, filter out player's name, shuffle
+    const playerNameLower = config.playerName.toLowerCase();
+    const availableBotNames = BOT_NAMES.filter(
+      name => name.toLowerCase() !== playerNameLower
+    );
+    const shuffledNames = shuffle([...availableBotNames]);
+
     for (let i = 0; i < config.botCount; i++) {
       newPlayers.push({
         id: `bot-${i}`,
-        name: `Bot ${i + 1}`,
+        name: shuffledNames[i % shuffledNames.length],
         isBot: true,
         score: 0,
         hand: null,
@@ -79,7 +121,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     setDrawPile(deck);
     setPlayers(newPlayers);
     setGameState(GameState.PLAYING);
-    setMessage('Game Start! Match the symbol on the Center Card!');
+    setMessage('Match the Center Card!');
     setLastWinnerId(null);
     setPenaltyUntil(0);
     setMatchedSymbolId(null);
@@ -141,7 +183,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     setLastWinnerId(playerId);
     setGameState(GameState.ROUND_ANIMATION); // Pauses the game loop
 
-    setMessage(`${winner.name} found the match!`);
+    setMessage(`${winner.name} found it!`);
 
     // 3. Wait 2 seconds before dealing next card
     setTimeout(() => {
@@ -180,13 +222,13 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     // Reset States
     setMatchedSymbolId(null);
     setGameState(GameState.PLAYING); // Resumes bot timers via useEffect
-    setMessage('Next Round!');
+    setMessage('Match the Center Card!');
   };
 
   const endGame = () => {
     setGameState(GameState.GAME_OVER);
     clearAllBotTimers();
-    setMessage('Game Over! No more cards.');
+    setMessage('Game Over!');
     stopBackgroundMusic();
   };
 
@@ -209,7 +251,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
       // Penalty
       playErrorSound();
       setPenaltyUntil(now + PENALTY_DURATION);
-      setMessage("Miss! 3 second penalty!");
+      setMessage("Miss! 3s Penalty!");
     }
   };
 
@@ -246,12 +288,14 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white p-4 animate-fadeIn">
-        <div className="bg-white text-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center">
-          <Trophy className={`w-24 h-24 mx-auto mb-4 ${isHumanWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
-          <h2 className="text-4xl font-bold mb-2">{isHumanWinner ? 'You Won!' : `${winner.name} Wins!`}</h2>
-          <p className="text-gray-500 mb-6">Final Scores</p>
+        <div className="bg-white text-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center flex flex-col max-h-[90vh]">
+          <div className="shrink-0">
+            <Trophy className={`w-24 h-24 mx-auto mb-4 ${isHumanWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
+            <h2 className="text-4xl font-bold mb-2">{isHumanWinner ? 'You Won!' : `${winner.name} Wins!`}</h2>
+            <p className="text-gray-500 mb-6">Final Scores</p>
+          </div>
 
-          <div className="space-y-3 mb-8">
+          <div className="space-y-3 mb-8 overflow-y-auto flex-1">
             {sortedPlayers.map((p, idx) => (
               <div key={p.id} className="flex justify-between items-center p-3 bg-gray-100 rounded-xl font-bold">
                 <div className="flex items-center gap-2">
@@ -263,12 +307,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
             ))}
           </div>
 
-          <div className="flex gap-4 justify-center">
+          <div className="flex gap-4 justify-center shrink-0">
             <button
               onClick={handleExit}
               className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-gray-700 transition"
             >
-              Exit to Lobby
+              Exit
             </button>
             <button
               onClick={startNewGame}
@@ -283,116 +327,141 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   }
 
   return (
-    <div className="flex flex-col h-screen bg-slate-100 overflow-hidden">
-      {/* Top Bar: Stats */}
-      <div className="bg-white shadow-sm p-2 flex justify-between items-center z-10">
-        <div className="flex items-center gap-4">
-           <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-sm px-3 py-1 rounded hover:bg-slate-100 transition-colors">EXIT GAME</button>
-           <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded-lg">
-             <span className="text-xs text-gray-500 uppercase font-bold">Pile Left</span>
-             <span className="font-bold text-indigo-700">{drawPile.length}</span>
-           </div>
-        </div>
-        <div className="font-bold text-lg text-slate-700">{message}</div>
-        <div className="flex items-center gap-2">
-            <div className={`px-3 py-1 rounded-lg flex items-center gap-2 ${isPenaltyActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-               {isPenaltyActive ? <XCircle size={16}/> : <Zap size={16}/>}
-               <span className="font-bold text-sm">{isPenaltyActive ? `WAIT ${timeLeft}s` : 'READY'}</span>
+    <>
+      {/* Mobile Portrait Orientation Warning */}
+      {isMobilePortrait && (
+        <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+          <div className="relative mb-8">
+            <Smartphone size={64} className="animate-spin-slow" />
+            <div className="absolute top-0 right-0 -mr-4 -mt-2">
+              <Zap className="text-yellow-400 animate-pulse" size={24}/>
             </div>
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
+          <p className="text-indigo-200 mb-8 max-w-xs">
+            SameSnap is designed to be played in landscape mode for the best experience.
+          </p>
+          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
+            Rotate to continue
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Main Game Area */}
-      <div className="flex-1 relative flex flex-col items-center justify-center p-4">
+      <div className={`flex flex-col h-screen bg-slate-100 overflow-hidden ${isMobilePortrait ? 'blur-sm' : ''}`}>
+        {/* Top Bar: Stats */}
+        <div className="bg-white shadow-sm h-12 shrink-0 px-2 md:px-4 flex justify-between items-center z-10">
+          <div className="flex items-center gap-2 md:gap-4">
+             <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-xs md:text-sm px-2 md:px-3 py-1 rounded hover:bg-slate-100 transition-colors">EXIT</button>
+             <div className="flex items-center gap-1 md:gap-2 bg-indigo-50 px-2 md:px-3 py-1 rounded-lg">
+               <span className="text-xs text-gray-500 uppercase font-bold hidden sm:inline">Pile</span>
+               <span className="font-bold text-indigo-700 text-sm">{drawPile.length}</span>
+             </div>
+          </div>
+          <div className="font-bold text-sm md:text-lg text-slate-700 truncate max-w-[40%]">{message}</div>
+          <div className="flex items-center gap-2">
+              <div className={`px-2 md:px-3 py-1 rounded-lg flex items-center gap-1 md:gap-2 ${isPenaltyActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+                 {isPenaltyActive ? <XCircle size={16}/> : <Zap size={16}/>}
+                 <span className="font-bold text-xs md:text-sm">{isPenaltyActive ? `WAIT ${timeLeft}s` : 'READY'}</span>
+              </div>
+          </div>
+        </div>
 
-        {/* Opponents (Top) */}
-        <div className="flex gap-4 mb-4 md:mb-8 overflow-x-auto w-full justify-center py-2">
-          {bots.map(bot => (
-            <div key={bot.id} className={`flex flex-col items-center transition-all duration-300 ${lastWinnerId === bot.id ? 'scale-110' : 'opacity-80'}`}>
-               <div className="relative">
-                 {bot.hand && (
-                   <Card
-                     card={bot.hand}
-                     size={CARD_SIZE_SM}
-                     layoutMode={config.cardDifficulty}
-                     disabled
-                     className="bg-gray-50"
-                     interactive={false}
-                   />
-                 )}
-                 <div className="absolute -bottom-2 -right-2 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow">
-                   {bot.score}
+        {/* Main Game Area */}
+        <div className="flex-1 relative flex flex-col items-center justify-center p-2 md:p-4">
+
+          {/* Opponents (Top) */}
+          <div className="flex gap-2 md:gap-4 mb-2 md:mb-4 overflow-x-auto w-full justify-center py-2">
+            {bots.map(bot => (
+              <div
+                key={bot.id}
+                className={`flex flex-col items-center transition-all duration-300 ${
+                  lastWinnerId === bot.id
+                    ? 'scale-110'
+                    : 'opacity-70 scale-90'
+                }`}
+              >
+                 <div className="relative">
+                   {bot.hand && (
+                     <Card
+                       card={bot.hand}
+                       size={botCardSize}
+                       layoutMode={config.cardDifficulty}
+                       disabled
+                       className="bg-gray-50"
+                       interactive={false}
+                     />
+                   )}
+                   <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow">
+                     {bot.score}
+                   </div>
                  </div>
+                 <span className="text-xs font-bold mt-1 text-gray-500">{bot.name}</span>
+                 {lastWinnerId === bot.id && <div className="text-xs text-green-600 font-bold animate-bounce">Got it!</div>}
+              </div>
+            ))}
+          </div>
+
+          {/* Center Arena */}
+          <div className="flex flex-row items-center gap-4 md:gap-8 lg:gap-16 relative">
+
+            {/* Player Hand (LEFT) */}
+            <div className="relative">
+               <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-indigo-600 font-bold tracking-widest text-xs uppercase flex items-center gap-1 whitespace-nowrap">
+                  <User size={12}/> {humanPlayer?.name || 'You'}
                </div>
-               <span className="text-xs font-bold mt-2 text-gray-500">{bot.name}</span>
-               {lastWinnerId === bot.id && <div className="text-xs text-green-600 font-bold animate-bounce">Got it!</div>}
+               {humanPlayer?.hand && (
+                 <Card
+                   card={humanPlayer.hand}
+                   size={cardSize}
+                   layoutMode={config.cardDifficulty}
+                   onClickSymbol={handlePlayerClick}
+                   disabled={isPenaltyActive || isAnimating}
+                   highlightError={isPenaltyActive}
+                   className="border-indigo-500 bg-indigo-50 shadow-indigo-200 hover:scale-[1.02] transition-transform"
+                   interactive={true}
+                 />
+               )}
+               {/* Penalty Overlay */}
+               {isPenaltyActive && (
+                 <div className="absolute inset-0 bg-red-500/20 rounded-full z-20 flex items-center justify-center backdrop-blur-[2px] animate-pulse pointer-events-none">
+                   <XCircle className="text-red-600 w-16 h-16 drop-shadow-lg" />
+                 </div>
+               )}
+               <div className="absolute -bottom-3 -right-3 bg-indigo-600 text-white text-base font-bold w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+                  {humanPlayer?.score || 0}
+               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Center Arena */}
-        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16 lg:gap-24 relative">
+            {/* The Deck / Center Card (RIGHT) */}
+            <div className="relative group">
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-xs uppercase">Center</div>
+               {centerCard ? (
+                 <Card
+                   card={centerCard}
+                   size={cardSize}
+                   layoutMode={config.cardDifficulty}
+                   highlightSymbolId={matchedSymbolId}
+                   disabled={isPenaltyActive || isAnimating}
+                   className="z-10 relative"
+                   interactive={false}
+                 />
+               ) : (
+                 <div style={{ width: cardSize, height: cardSize }} className="rounded-full bg-gray-200 border-4 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">
+                   Empty
+                 </div>
+               )}
+            </div>
 
-          {/* Player Hand (LEFT) */}
-          <div className="relative">
-             <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-indigo-600 font-bold tracking-widest text-sm uppercase flex items-center gap-1 whitespace-nowrap">
-                <User size={14}/> {humanPlayer?.name || 'You'}
-             </div>
-             {humanPlayer?.hand && (
-               <Card
-                 card={humanPlayer.hand}
-                 size={window.innerWidth < 768 ? CARD_SIZE_MD : CARD_SIZE_LG}
-                 layoutMode={config.cardDifficulty}
-                 onClickSymbol={handlePlayerClick} // Enable clicking on self
-                 disabled={isPenaltyActive || isAnimating}
-                 highlightError={isPenaltyActive}
-                 className="border-indigo-500 bg-indigo-50 shadow-indigo-200 hover:scale-[1.02]"
-                 interactive={true} // Enable interaction
-               />
-             )}
-             {/* Penalty Overlay */}
-             {isPenaltyActive && (
-               <div className="absolute inset-0 bg-red-500/20 rounded-full z-20 flex items-center justify-center backdrop-blur-[2px] animate-pulse pointer-events-none">
-                 <XCircle className="text-red-600 w-16 h-16 drop-shadow-lg" />
-               </div>
-             )}
-             <div className="absolute -bottom-4 -right-4 bg-indigo-600 text-white text-lg font-bold w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
-                {humanPlayer?.score || 0}
-             </div>
           </div>
 
-          {/* The Deck / Center Card (RIGHT) */}
-          <div className="relative group">
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-sm uppercase">Center</div>
-             {centerCard ? (
-               <Card
-                 card={centerCard}
-                 size={window.innerWidth < 768 ? CARD_SIZE_MD : CARD_SIZE_LG}
-                 layoutMode={config.cardDifficulty}
-                 // Pass highlight info
-                 highlightSymbolId={matchedSymbolId}
-                 // Non-interactive
-                 disabled={isPenaltyActive || isAnimating}
-                 className="z-10 relative"
-                 interactive={false}
-               />
-             ) : (
-               <div className="w-64 h-64 rounded-full bg-gray-200 border-4 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">
-                 Empty
-               </div>
-             )}
+          {/* Instructions */}
+          <div className="mt-4 text-center max-w-md text-gray-500 text-xs md:text-sm hidden md:block">
+            Find the ONE symbol that matches between <strong>CENTER</strong> and <strong>YOUR</strong> card. Click it on <strong>YOUR</strong> card!
           </div>
 
         </div>
-
-        {/* Instructions */}
-        <div className="mt-8 text-center max-w-md text-gray-500 text-sm hidden md:block">
-          Find the ONE symbol that matches between the <strong>CENTER</strong> card and <strong>YOUR</strong> card. <br/>
-          Click it on <strong>YOUR</strong> card!
-        </div>
-
       </div>
-    </div>
+    </>
   );
 };
 

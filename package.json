@@ -9,7 +9,12 @@
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:party\"",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy:party": "partykit deploy"
+    "deploy:party": "partykit deploy",
+    "test": "npm run test:logic && npm run test:multiplayer",
+    "test:logic": "node test-game-logic.mjs",
+    "test:multiplayer": "node test-multiplayer.mjs",
+    "test:comprehensive": "node test-multiplayer-comprehensive.mjs",
+    "test:all": "npm run test:logic && npm run test:multiplayer && npm run test:comprehensive"
   },
   "dependencies": {
     "lucide-react": "^0.560.0",
@@ -18,12 +23,14 @@
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
     "concurrently": "^9.2.1",
     "partykit": "^0.0.115",
     "typescript": "~5.8.2",
     "unenv": "^2.0.0-rc.0",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "ws": "^8.18.0"
   }
 }

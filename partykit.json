@@ -1,5 +1,6 @@
 {
   "name": "samesnap",
   "main": "party/index.ts",
-  "compatibilityDate": "2024-01-01"
+  "compatibilityDate": "2024-01-01",
+  "port": 1999
 }

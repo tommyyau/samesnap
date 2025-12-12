@@ -22,16 +22,17 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   const [isConnected, setIsConnected] = useState(false);
   const [isHost, setIsHost] = useState(false);
   const [latency, setLatency] = useState<number>(0);
+  const [hasReceivedRoomState, setHasReceivedRoomState] = useState(false);
   const pingInterval = useRef<ReturnType<typeof setInterval>>();
-  const reconnectData = useRef<{ roomCode: string; playerId: string } | null>(null);
   const hasJoined = useRef(false);
+  // Store countdown value if it arrives before room_state
+  const pendingCountdown = useRef<number | null>(null);
 
   const host = process.env.PARTYKIT_HOST || 'localhost:1999';
 
   const socket = usePartySocket({
     host,
     room: roomCode,
-    query: reconnectData.current ? { reconnectId: reconnectData.current.playerId } : undefined,
     onOpen: () => {
       setIsConnected(true);
       if (!hasJoined.current) {
@@ -48,7 +49,8 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     },
     onMessage: (event) => {
       const message: ServerMessage = JSON.parse(event.data);
-      handleServerMessage(message);
+      // Defer message handling to avoid setState during render (React StrictMode issue)
+      setTimeout(() => handleServerMessage(message), 0);
     },
   });
 
@@ -61,11 +63,21 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   const handleServerMessage = useCallback((message: ServerMessage) => {
     switch (message.type) {
       case 'room_state':
-        setRoomState(message.payload);
-        // Store reconnect data
+        setHasReceivedRoomState(true);
+        // Apply pending countdown if it arrived before room_state
+        if (pendingCountdown.current !== null) {
+          setRoomState({
+            ...message.payload,
+            phase: RoomPhase.COUNTDOWN,
+            countdown: pendingCountdown.current,
+          });
+          pendingCountdown.current = null;
+        } else {
+          setRoomState(message.payload);
+        }
+        // Update host status
         const me = message.payload.players.find(p => p.isYou);
         if (me) {
-          reconnectData.current = { roomCode, playerId: me.id };
           setIsHost(me.isHost);
         }
         break;
@@ -75,25 +87,29 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'player_joined':
-        setRoomState(prev => prev ? {
-          ...prev,
-          players: [...prev.players.filter(p => p.id !== message.payload.player.id), message.payload.player]
-        } : null);
-        break;
-
-      case 'player_left':
         setRoomState(prev => {
           if (!prev) return null;
-          const leavingPlayer = prev.players.find(p => p.id === message.payload.playerId);
-          if (leavingPlayer?.isYou) {
-            onKicked?.();
-          }
+          const newPlayers = [...prev.players.filter(p => p.id !== message.payload.player.id), message.payload.player];
+          return { ...prev, players: newPlayers };
+        });
+        break;
+
+      case 'player_left': {
+        // Check if it's us being removed (kicked) - do this before setState to avoid setState-in-setState
+        const wasKicked = roomState?.players.find(p => p.id === message.payload.playerId)?.isYou;
+        setRoomState(prev => {
+          if (!prev) return null;
           return {
             ...prev,
             players: prev.players.filter(p => p.id !== message.payload.playerId)
           };
         });
+        // Call onKicked callback outside of setState to avoid React errors
+        if (wasKicked) {
+          setTimeout(() => onKicked?.(), 0);
+        }
         break;
+      }
 
       case 'player_disconnected':
         setRoomState(prev => prev ? {
@@ -115,20 +131,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
 
       case 'countdown':
         setRoomState(prev => {
-          // If we haven't received room_state yet, create a minimal state
-          // This handles the race condition when auto-start triggers immediately
+          // If we haven't received room_state yet, store countdown for later
+          // The room_state handler will apply it when state arrives
           if (!prev) {
-            return {
-              roomCode,
-              phase: RoomPhase.COUNTDOWN,
-              players: [],
-              config: null,
-              deckRemaining: 0,
-              centerCard: null,
-              yourCard: null,
-              roundNumber: 0,
-              countdown: message.payload.seconds,
-            };
+            pendingCountdown.current = message.payload.seconds;
+            return null;
           }
           return {
             ...prev,
@@ -140,15 +147,14 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
 
       case 'round_start':
         setRoomState(prev => {
-          const baseState = prev || {
-            roomCode,
-            phase: RoomPhase.PLAYING,
-            players: [],
-            config: null,
-            deckRemaining: 0,
-          };
+          // Don't create incomplete state if room_state hasn't arrived yet
+          // This should rarely happen since we delayed auto-start
+          if (!prev) {
+            console.warn('round_start received before room_state');
+            return null;
+          }
           return {
-            ...baseState,
+            ...prev,
             phase: RoomPhase.PLAYING,
             centerCard: message.payload.centerCard,
             yourCard: message.payload.yourCard,
@@ -255,6 +261,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     isConnected,
     isHost,
     latency,
+    hasReceivedRoomState,
     attemptMatch,
     setConfig,
     startGame,

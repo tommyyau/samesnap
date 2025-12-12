@@ -17,6 +17,7 @@ export interface CardData {
 export enum CardDifficulty {
   EASY = 'EASY',
   MEDIUM = 'MEDIUM',
+  HARD = 'HARD',
 }
 
 // ============================================

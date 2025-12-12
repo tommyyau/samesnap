@@ -21,7 +21,8 @@ export const SYMBOLS: SymbolItem[] = EMOJIS.map((char, index) => ({
 // Number of symbols per card = N + 1
 // Total cards = N^2 + N + 1
 // Total symbols needed = N^2 + N + 1
-export const generateDeck = (n: number = 7): CardData[] => {
+export const generateDeck = (n: number = 7, customSymbols?: SymbolItem[]): CardData[] => {
+  const symbolSet = customSymbols || SYMBOLS;
   const cards: number[][] = [];
 
   // 1. Generate the first N+1 cards (The horizon)
@@ -50,7 +51,7 @@ export const generateDeck = (n: number = 7): CardData[] => {
     id: index,
     symbols: cardIndices.map(idx => {
       // Safety fallback if we don't have enough symbols defined
-      return SYMBOLS[idx % SYMBOLS.length];
+      return symbolSet[idx % symbolSet.length];
     })
   }));
 

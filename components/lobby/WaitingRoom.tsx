@@ -1,31 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock } from 'lucide-react';
-import { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
+import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap } from 'lucide-react';
 import { CardDifficulty, RoomPhase } from '../../shared/types';
+import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 
 interface WaitingRoomProps {
   roomCode: string;
   playerName: string;
   onLeave: () => void;
-  onGameStart: () => void;
+  multiplayerHook: ReturnType<typeof useMultiplayerGame>;
 }
 
-const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave, onGameStart }) => {
+const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplayerHook }) => {
   const [copied, setCopied] = useState(false);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
   const [targetPlayers, setTargetPlayers] = useState(2);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  const { roomState, isConnected, isHost, latency, setConfig, startGame, leaveRoom } = useMultiplayerGame({
-    roomCode,
-    playerName,
-    onError: (err) => console.error(err),
-    onKicked: onLeave,
-    onRoomExpired: (reason) => {
-      alert(reason);
-      onLeave();
-    },
-  });
+  const { roomState, isConnected, isHost, latency, setConfig, startGame, leaveRoom } = multiplayerHook;
+
+  // Window resize listener for portrait detection
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Check if mobile portrait
+  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
   // Send config when host changes settings
   useEffect(() => {
@@ -34,12 +38,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
     }
   }, [isHost, cardDifficulty, targetPlayers, setConfig, roomState?.phase]);
 
-  // Redirect to game when it starts
-  useEffect(() => {
-    if (roomState?.phase === RoomPhase.PLAYING || roomState?.phase === RoomPhase.COUNTDOWN) {
-      onGameStart();
-    }
-  }, [roomState?.phase, onGameStart]);
+  // Note: Navigation to game is now handled by MultiplayerWrapper in App.tsx
 
   // Room timeout countdown
   useEffect(() => {
@@ -79,8 +78,28 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
   const canStart = isHost && currentPlayers >= 2;
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4">
-      <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full">
+    <>
+      {/* Mobile Portrait Orientation Warning */}
+      {isMobilePortrait && (
+        <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
+          <div className="relative mb-8">
+            <Smartphone size={64} className="animate-spin-slow" />
+            <div className="absolute top-0 right-0 -mr-4 -mt-2">
+              <Zap className="text-yellow-400 animate-pulse" size={24}/>
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
+          <p className="text-indigo-200 mb-8 max-w-xs">
+            SameSnap is designed to be played in landscape mode for the best experience.
+          </p>
+          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
+            Rotate to continue
+          </div>
+        </div>
+      )}
+
+      <div className={`flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4 ${isMobilePortrait ? 'blur-sm' : ''}`}>
+        <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full">
         {/* Connection & Timer Status */}
         <div className="flex justify-between items-center mb-4">
           <div className={`flex items-center gap-2 text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
@@ -183,7 +202,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
             {/* Card Layout */}
             <div className="mb-6">
               <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => setCardDifficulty(CardDifficulty.EASY)}
                   className={`py-2 rounded-xl text-sm font-bold transition-all ${
@@ -192,7 +211,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  Easy (Orderly)
+                  Easy
                 </button>
                 <button
                   onClick={() => setCardDifficulty(CardDifficulty.MEDIUM)}
@@ -202,7 +221,17 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  Medium (Chaotic)
+                  Medium
+                </button>
+                <button
+                  onClick={() => setCardDifficulty(CardDifficulty.HARD)}
+                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                    cardDifficulty === CardDifficulty.HARD
+                      ? 'bg-red-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Hard
                 </button>
               </div>
             </div>
@@ -214,7 +243,10 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
           <div className="mb-6 p-3 bg-gray-50 rounded-xl">
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Target:</span> {roomState.config.targetPlayers} players |{' '}
-              <span className="font-semibold">Layout:</span> {roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' : 'Medium'}
+              <span className="font-semibold">Layout:</span> {
+                roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' :
+                roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' : 'Hard'
+              }
             </p>
           </div>
         )}
@@ -243,8 +275,9 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, playerName, onLeave
             <LogOut size={20} /> Leave Room
           </button>
         </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 

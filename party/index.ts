@@ -8,7 +8,7 @@ import { generateDeck, SYMBOLS } from "../shared/gameLogic";
 import { CardDifficulty } from "../shared/types";
 
 const PENALTY_DURATION = 3000;
-const DEFAULT_TARGET_PLAYERS = 2;
+const DEFAULT_TARGET_PLAYERS = 8; // High default to prevent accidental auto-start
 const ARBITRATION_WINDOW_MS = 100;
 const RECONNECT_GRACE_PERIOD = 60000;
 const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
@@ -55,20 +55,19 @@ export default class SameSnapRoom implements Party.Server {
     const player = this.players.get(conn.id);
     if (!player) return;
 
-    if (this.phase === RoomPhase.WAITING) {
-      this.removePlayer(conn.id);
-    } else {
-      // During game - mark disconnected
-      player.status = PlayerStatus.DISCONNECTED;
-      this.disconnectedPlayers.set(conn.id, { player, disconnectedAt: Date.now() });
-      this.broadcastToAll({ type: 'player_disconnected', payload: { playerId: conn.id } });
+    // Always give a short grace period for reconnection
+    // This handles React StrictMode's unmount/remount cycle
+    const gracePeriod = this.phase === RoomPhase.WAITING ? 2000 : RECONNECT_GRACE_PERIOD;
 
-      setTimeout(() => {
-        if (this.disconnectedPlayers.has(conn.id)) {
-          this.removePlayer(conn.id);
-        }
-      }, RECONNECT_GRACE_PERIOD);
-    }
+    player.status = PlayerStatus.DISCONNECTED;
+    this.disconnectedPlayers.set(conn.id, { player, disconnectedAt: Date.now() });
+    this.broadcastToAll({ type: 'player_disconnected', payload: { playerId: conn.id } });
+
+    setTimeout(() => {
+      if (this.disconnectedPlayers.has(conn.id)) {
+        this.removePlayer(conn.id);
+      }
+    }, gracePeriod);
   }
 
   onMessage(message: string, sender: Party.Connection) {
@@ -168,7 +167,9 @@ export default class SameSnapRoom implements Party.Server {
     this.sendRoomState(conn.id);
 
     // Check if we've reached target players and should auto-start
-    this.checkAutoStart();
+    // Delay slightly to ensure room_state message is received before countdown starts
+    // This fixes a race condition where countdown can arrive before room_state
+    setTimeout(() => this.checkAutoStart(), 50);
   }
 
   private startRoomTimeout() {
