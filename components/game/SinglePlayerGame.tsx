@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty, GameDuration } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
-import { stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
+import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, User, Zap, Smartphone } from 'lucide-react';
@@ -79,7 +79,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     const deckSize = Math.min(gameDuration, generatedDeck.length);
     const deck = generatedDeck.slice(0, deckSize);
 
-    // Note: Audio is started in Lobby.tsx during user gesture (required for iOS)
+    // Start background music (also called in Lobby for initial game, but needed for Play Again)
+    startBackgroundMusic();
 
     // Shuffle the deck
     const shuffledDeck = shuffle([...deck]);
