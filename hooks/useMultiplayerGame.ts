@@ -292,9 +292,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
             console.warn('round_start received before room_state');
             return null;
           }
-          // Update all players' cardsRemaining from allPlayersRemaining
+          // Update all players' cardsRemaining from allPlayersRemaining (with safety check)
+          const allPlayersRemaining = message.payload.allPlayersRemaining || [];
           const updatedPlayers = prev.players.map(p => {
-            const updated = message.payload.allPlayersRemaining.find(r => r.playerId === p.id);
+            const updated = allPlayersRemaining.find(r => r.playerId === p.id);
             return updated ? { ...p, cardsRemaining: updated.cardsRemaining } : p;
           });
           return {
@@ -334,26 +335,31 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'game_over':
-        setRoomState(prev => prev ? {
-          ...prev,
-          phase: RoomPhase.GAME_OVER,
-          gameEndReason: message.payload.reason,
-          rejoinWindowEndsAt: message.payload.rejoinWindowMs ? Date.now() + message.payload.rejoinWindowMs : undefined,
-          playersWantRematch: [],
-          players: message.payload.finalStandings.map(s => {
-            const existingPlayer = prev.players.find(p => p.id === s.playerId);
-            return existingPlayer
-              ? { ...existingPlayer, cardsRemaining: s.cardsRemaining }
-              : {
-                  id: s.playerId,
-                  name: s.name,
-                  status: 'connected' as const,
-                  cardsRemaining: s.cardsRemaining,
-                  isHost: false,
-                  isYou: false
-                };
-          })
-        } : null);
+        setRoomState(prev => {
+          if (!prev) return null;
+          // Safety check for finalStandings
+          const finalStandings = message.payload.finalStandings || [];
+          return {
+            ...prev,
+            phase: RoomPhase.GAME_OVER,
+            gameEndReason: message.payload.reason,
+            rejoinWindowEndsAt: message.payload.rejoinWindowMs ? Date.now() + message.payload.rejoinWindowMs : undefined,
+            playersWantRematch: [],
+            players: finalStandings.map(s => {
+              const existingPlayer = prev.players.find(p => p.id === s.playerId);
+              return existingPlayer
+                ? { ...existingPlayer, cardsRemaining: s.cardsRemaining }
+                : {
+                    id: s.playerId,
+                    name: s.name,
+                    status: 'connected' as const,
+                    cardsRemaining: s.cardsRemaining,
+                    isHost: false,
+                    isYou: false
+                  };
+            })
+          };
+        });
         break;
 
       case 'play_again_ack':
