@@ -440,11 +440,11 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
           </div>
         </div>
 
-        {/* Main Game Area */}
-        <div className="flex-1 relative flex flex-col items-center justify-center p-2 md:p-4">
+        {/* Game Arena */}
+        <div className="flex-1 flex flex-col relative w-full h-full">
 
-          {/* Opponents (Top) */}
-          <div className="flex gap-2 md:gap-4 mb-2 md:mb-4 overflow-x-auto w-full justify-center py-2">
+          {/* Bot Row - Top of screen, fixed height */}
+          <div className="flex justify-center items-start pt-2 gap-3 md:gap-6 shrink-0 h-[80px] z-50">
             {bots.map(bot => (
               <div
                 key={bot.id}
@@ -482,8 +482,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
             ))}
           </div>
 
-          {/* Center Arena */}
-          <div className="flex flex-row items-center gap-4 md:gap-8 lg:gap-16 relative">
+          {/* Main Card Area - Centered */}
+          <div className="flex-1 flex items-center justify-around max-w-6xl mx-auto w-full gap-8 pb-4 px-4 md:px-10">
 
             {/* Player Hand (LEFT) */}
             <div className="relative">
