@@ -403,22 +403,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     );
   }
 
-  // Get winner name for celebration overlay
-  const lastWinnerPlayer = lastWinnerId ? players.find(p => p.id === lastWinnerId) : null;
-
   return (
     <>
-      {/* Round Win Celebration Overlay */}
-      {gameState === GameState.ROUND_ANIMATION && lastWinnerId && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gradient-to-br from-green-500/90 to-emerald-600/90 animate-fadeIn">
-          <div className="text-center animate-bounce">
-            <div className="text-5xl md:text-6xl font-black text-white drop-shadow-lg">
-              {lastWinnerId === 'player' ? 'YOU GOT IT!' : `${lastWinnerPlayer?.name} got it!`}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Mobile Portrait Orientation Warning */}
       {isMobilePortrait && (
         <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">

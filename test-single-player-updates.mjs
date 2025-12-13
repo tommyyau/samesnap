@@ -124,10 +124,13 @@ test('SinglePlayerGame has VICTORY_CELEBRATION state handling', () => {
   assert(gameFile.includes('GameState.VICTORY_CELEBRATION'), 'Should handle VICTORY_CELEBRATION state');
 });
 
-test('SinglePlayerGame has round win celebration overlay', () => {
+test('SinglePlayerGame has original round animation (no overlay)', () => {
   const gameFile = readFileSync('./components/game/SinglePlayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('YOU GOT IT!'), 'Should show YOU GOT IT! for round win');
-  assert(gameFile.includes('got it!'), 'Should show {name} got it! for bot wins');
+  // Original experience: bot cards scale, show "Got it!" text, highlight matched symbol
+  // No full-screen green overlay
+  assert(gameFile.includes('lastWinnerId === bot.id'), 'Should track winner for scaling');
+  assert(gameFile.includes('Got it!'), 'Should show Got it! text for winner');
+  assert(gameFile.includes('highlightSymbolId={matchedSymbolId}'), 'Should highlight matched symbol on center card');
 });
 
 test('SinglePlayerGame has victory celebration with confetti', () => {
