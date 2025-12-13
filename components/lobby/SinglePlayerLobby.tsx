@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Difficulty, GameConfig, CardDifficulty } from '../../shared/types';
+import { Difficulty, GameConfig, CardDifficulty, GameDuration } from '../../shared/types';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 import { ArrowLeft, Smartphone, Zap } from 'lucide-react';
 
@@ -13,6 +13,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   // Window resize listener for portrait detection
@@ -38,7 +39,8 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
       playerName: name.trim() || 'Player 1',
       botCount,
       difficulty,
-      cardDifficulty
+      cardDifficulty,
+      gameDuration
     });
   };
 
@@ -194,6 +196,46 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
                 </div>
               </div>
 
+            </div>
+
+            {/* Game Duration - Full Width */}
+            <div>
+              <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Game Duration</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGameDuration(GameDuration.SHORT)}
+                  className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                    gameDuration === GameDuration.SHORT
+                      ? 'bg-green-500 text-white shadow-md ring-2 ring-green-200'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  SHORT (10)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGameDuration(GameDuration.MEDIUM)}
+                  className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                    gameDuration === GameDuration.MEDIUM
+                      ? 'bg-yellow-500 text-white shadow-md ring-2 ring-yellow-200'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  MEDIUM (25)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGameDuration(GameDuration.LONG)}
+                  className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                    gameDuration === GameDuration.LONG
+                      ? 'bg-red-500 text-white shadow-md ring-2 ring-red-200'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                  }`}
+                >
+                  LONG (50)
+                </button>
+              </div>
             </div>
 
             {/* Footer: Play Button */}

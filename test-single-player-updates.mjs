@@ -141,23 +141,23 @@ test('SinglePlayerGame has victory celebration with confetti', () => {
 });
 
 // ============================================
-// TEST SUITE: Lobby Component
+// TEST SUITE: SinglePlayerLobby Component
 // ============================================
-console.log('\n🏠 LOBBY TESTS\n');
+console.log('\n🏠 SINGLE PLAYER LOBBY TESTS\n');
 
-test('Lobby imports GameDuration', () => {
-  const lobbyFile = readFileSync('./components/Lobby.tsx', 'utf-8');
+test('SinglePlayerLobby imports GameDuration', () => {
+  const lobbyFile = readFileSync('./components/lobby/SinglePlayerLobby.tsx', 'utf-8');
   assert(lobbyFile.includes('GameDuration'), 'Should import GameDuration');
 });
 
-test('Lobby has gameDuration state', () => {
-  const lobbyFile = readFileSync('./components/Lobby.tsx', 'utf-8');
+test('SinglePlayerLobby has gameDuration state', () => {
+  const lobbyFile = readFileSync('./components/lobby/SinglePlayerLobby.tsx', 'utf-8');
   assert(lobbyFile.includes('useState<GameDuration>'), 'Should have gameDuration state');
   assert(lobbyFile.includes('setGameDuration'), 'Should have setGameDuration setter');
 });
 
-test('Lobby includes gameDuration in config', () => {
-  const lobbyFile = readFileSync('./components/Lobby.tsx', 'utf-8');
+test('SinglePlayerLobby includes gameDuration in config', () => {
+  const lobbyFile = readFileSync('./components/lobby/SinglePlayerLobby.tsx', 'utf-8');
 
   // Find the onStart call
   const onStartMatch = lobbyFile.match(/onStart\(\{[\s\S]*?\}\)/);
@@ -165,8 +165,8 @@ test('Lobby includes gameDuration in config', () => {
   assert(onStartMatch[0].includes('gameDuration'), 'Config should include gameDuration');
 });
 
-test('Lobby has game duration selector buttons', () => {
-  const lobbyFile = readFileSync('./components/Lobby.tsx', 'utf-8');
+test('SinglePlayerLobby has game duration selector buttons', () => {
+  const lobbyFile = readFileSync('./components/lobby/SinglePlayerLobby.tsx', 'utf-8');
   assert(lobbyFile.includes('Game Duration'), 'Should have Game Duration label');
   assert(lobbyFile.includes('GameDuration.SHORT'), 'Should have SHORT option');
   assert(lobbyFile.includes('GameDuration.MEDIUM'), 'Should have MEDIUM option');
