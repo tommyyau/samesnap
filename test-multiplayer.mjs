@@ -522,7 +522,7 @@ async function runGameFlowTests() {
     cleanup(host, guest);
   });
 
-  await test('round_start includes accurate deckRemaining values', async () => {
+  await test('round_start includes accurate cardsRemaining values (traditional Dobble)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -533,11 +533,10 @@ async function runGameFlowTests() {
     }));
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
-    console.log('DEBUG first deck', firstRound.payload.deckRemaining);
-    // Default game duration is LONG (50 cards): 50 - 2 player cards - 1 center = 47
-    const expectedRemaining = 50 - 2 - 1;
-    if (firstRound.payload.deckRemaining !== expectedRemaining) {
-      throw new Error(`Expected ${expectedRemaining} cards remaining, got ${firstRound.payload.deckRemaining}`);
+    // With traditional Dobble: 50 cards, 2 players, 1 center = (50-1)/2 = 24 cards each
+    const expectedCardsPerPlayer = Math.floor((50 - 1) / 2);
+    if (firstRound.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player, got ${firstRound.payload.yourCardsRemaining}`);
     }
 
     const match = findMatchingSymbol(firstRound.payload.yourCard, firstRound.payload.centerCard);
@@ -548,11 +547,16 @@ async function runGameFlowTests() {
       payload: { symbolId: match.id, clientTimestamp: Date.now() }
     }));
 
-    await waitForMessage(host, 'round_winner', 5000);
+    const winner = await waitForMessage(host, 'round_winner', 5000);
+    // Winner's cardsRemaining should decrease by 1
+    if (winner.payload.winnerCardsRemaining !== expectedCardsPerPlayer - 1) {
+      throw new Error(`Expected winner to have ${expectedCardsPerPlayer - 1} cards, got ${winner.payload.winnerCardsRemaining}`);
+    }
+
     const secondRound = await waitForMessage(host, 'round_start', 5000);
-    console.log('DEBUG second deck', secondRound.payload.deckRemaining, 'same message?', firstRound === secondRound, 'round', secondRound.payload.roundNumber);
-    if (secondRound.payload.deckRemaining !== expectedRemaining - 1) {
-      throw new Error(`Expected ${expectedRemaining - 1} after round, got ${secondRound.payload.deckRemaining}`);
+    // After winning, host should have 1 less card
+    if (secondRound.payload.yourCardsRemaining !== expectedCardsPerPlayer - 1) {
+      throw new Error(`Expected ${expectedCardsPerPlayer - 1} cards after winning, got ${secondRound.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
@@ -1225,9 +1229,6 @@ async function runLastPlayerStandingTests() {
       throw new Error('Game should start with cards');
     }
 
-    // Record initial deck remaining
-    const deckRemaining = roundStart.payload.deckRemaining;
-
     // Guest disconnects mid-game
     guest.ws.close();
 
@@ -1238,20 +1239,15 @@ async function runLastPlayerStandingTests() {
       throw new Error(`Expected reason=last_player_standing, got ${gameOver.payload.reason}`);
     }
 
-    // Survivor should have received bonus points for remaining deck
-    if (gameOver.payload.bonusAwarded !== deckRemaining) {
-      throw new Error(`Expected bonusAwarded=${deckRemaining}, got ${gameOver.payload.bonusAwarded}`);
+    // Host should be the winner (cardsRemaining = 0 for last player standing)
+    const hostStanding = gameOver.payload.finalStandings.find(s => s.playerId === host.playerId);
+    if (!hostStanding) {
+      throw new Error('Host should be in final standings');
     }
 
-    // Host should be in final scores with bonus points
-    const hostScore = gameOver.payload.finalScores.find(s => s.playerId === host.playerId);
-    if (!hostScore) {
-      throw new Error('Host should be in final scores');
-    }
-
-    // Score should be 0 (no rounds won) + deckRemaining (bonus)
-    if (hostScore.score !== deckRemaining) {
-      throw new Error(`Expected score=${deckRemaining}, got ${hostScore.score}`);
+    // For last player standing, winner gets cardsRemaining = 0
+    if (hostStanding.cardsRemaining !== 0) {
+      throw new Error(`Expected cardsRemaining=0 for winner, got ${hostStanding.cardsRemaining}`);
     }
 
     cleanup(host);
@@ -1270,7 +1266,7 @@ async function runLastPlayerStandingTests() {
 
     // Wait for round 1
     const round1 = await waitForMessage(host, 'round_start', 10000);
-    const initialDeckRemaining = round1.payload.deckRemaining;
+    const initialCardsRemaining = round1.payload.yourCardsRemaining;
 
     // Host wins round 1
     const match1 = findMatchingSymbol(round1.payload.yourCard, round1.payload.centerCard);
@@ -1294,10 +1290,12 @@ async function runLastPlayerStandingTests() {
     }));
 
     await waitForMessage(host, 'round_winner', 5000);
-
-    // Record deck remaining after 2 rounds
     const round3 = await waitForMessage(host, 'round_start', 5000);
-    const deckRemainingAfterRounds = round3.payload.deckRemaining;
+
+    // Host should have 2 fewer cards after winning 2 rounds
+    if (round3.payload.yourCardsRemaining !== initialCardsRemaining - 2) {
+      throw new Error(`Expected ${initialCardsRemaining - 2} cards after 2 wins, got ${round3.payload.yourCardsRemaining}`);
+    }
 
     // Guest disconnects
     guest.ws.close();
@@ -1309,16 +1307,10 @@ async function runLastPlayerStandingTests() {
       throw new Error(`Expected reason=last_player_standing, got ${gameOver.payload.reason}`);
     }
 
-    // Bonus should be the remaining deck after 2 rounds
-    if (gameOver.payload.bonusAwarded !== deckRemainingAfterRounds) {
-      throw new Error(`Expected bonusAwarded=${deckRemainingAfterRounds}, got ${gameOver.payload.bonusAwarded}`);
-    }
-
-    // Host's total score should be 2 (rounds won) + remaining deck (bonus)
-    const hostScore = gameOver.payload.finalScores.find(s => s.playerId === host.playerId);
-    const expectedScore = 2 + deckRemainingAfterRounds;
-    if (hostScore.score !== expectedScore) {
-      throw new Error(`Expected score=${expectedScore} (2 rounds + ${deckRemainingAfterRounds} bonus), got ${hostScore.score}`);
+    // Host should be winner with cardsRemaining = 0
+    const hostStanding = gameOver.payload.finalStandings.find(s => s.playerId === host.playerId);
+    if (hostStanding.cardsRemaining !== 0) {
+      throw new Error(`Expected cardsRemaining=0 for winner, got ${hostStanding.cardsRemaining}`);
     }
 
     cleanup(host);
@@ -1336,8 +1328,7 @@ async function runLastPlayerStandingTests() {
     }));
 
     // Wait for round start
-    const roundStart = await waitForMessage(host, 'round_start', 10000);
-    const deckRemaining = roundStart.payload.deckRemaining;
+    await waitForMessage(host, 'round_start', 10000);
 
     // Guest explicitly leaves (not just disconnect)
     guest.ws.send(JSON.stringify({ type: 'leave', payload: {} }));
@@ -1350,8 +1341,10 @@ async function runLastPlayerStandingTests() {
       throw new Error(`Expected reason=last_player_standing, got ${gameOver.payload.reason}`);
     }
 
-    if (gameOver.payload.bonusAwarded !== deckRemaining) {
-      throw new Error(`Expected bonusAwarded=${deckRemaining}, got ${gameOver.payload.bonusAwarded}`);
+    // Host should be winner with cardsRemaining = 0
+    const hostStanding = gameOver.payload.finalStandings.find(s => s.playerId === host.playerId);
+    if (hostStanding.cardsRemaining !== 0) {
+      throw new Error(`Expected cardsRemaining=0 for winner, got ${hostStanding.cardsRemaining}`);
     }
 
     cleanup(host);
@@ -2234,7 +2227,7 @@ async function runGameOverExitTests() {
 async function runGameDurationTests() {
   console.log('\n⏱️ GAME DURATION TESTS\n');
 
-  await test('SHORT game duration uses 10 cards', async () => {
+  await test('SHORT game duration (10 cards) deals correct stacks to players', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2246,16 +2239,16 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // 10 cards total - 2 player cards - 1 center card = 7 remaining
-    const expectedRemaining = 10 - 2 - 1;
-    if (roundStart.payload.deckRemaining !== expectedRemaining) {
-      throw new Error(`Expected ${expectedRemaining} cards remaining for SHORT game, got ${roundStart.payload.deckRemaining}`);
+    // 10 cards total, 2 players, 1 center = (10-1)/2 = 4 cards each (1 discarded)
+    const expectedCardsPerPlayer = Math.floor((10 - 1) / 2);
+    if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for SHORT game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
   });
 
-  await test('MEDIUM game duration uses 25 cards', async () => {
+  await test('MEDIUM game duration (25 cards) deals correct stacks to players', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2267,16 +2260,16 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // 25 cards total - 2 player cards - 1 center card = 22 remaining
-    const expectedRemaining = 25 - 2 - 1;
-    if (roundStart.payload.deckRemaining !== expectedRemaining) {
-      throw new Error(`Expected ${expectedRemaining} cards remaining for MEDIUM game, got ${roundStart.payload.deckRemaining}`);
+    // 25 cards total, 2 players, 1 center = (25-1)/2 = 12 cards each
+    const expectedCardsPerPlayer = Math.floor((25 - 1) / 2);
+    if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for MEDIUM game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
   });
 
-  await test('LONG game duration uses 50 cards', async () => {
+  await test('LONG game duration (50 cards) deals correct stacks to players', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2288,16 +2281,16 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // 50 cards total - 2 player cards - 1 center card = 47 remaining
-    const expectedRemaining = 50 - 2 - 1;
-    if (roundStart.payload.deckRemaining !== expectedRemaining) {
-      throw new Error(`Expected ${expectedRemaining} cards remaining for LONG game, got ${roundStart.payload.deckRemaining}`);
+    // 50 cards total, 2 players, 1 center = (50-1)/2 = 24 cards each (1 discarded)
+    const expectedCardsPerPlayer = Math.floor((50 - 1) / 2);
+    if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for LONG game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
   });
 
-  await test('Default game duration is LONG (50 cards) when not specified', async () => {
+  await test('Default game duration deals correct stacks (LONG = 50 cards)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2309,10 +2302,10 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // Default is 50 cards: 50 - 2 player cards - 1 center = 47 remaining
-    const expectedRemaining = 50 - 2 - 1;
-    if (roundStart.payload.deckRemaining !== expectedRemaining) {
-      throw new Error(`Expected ${expectedRemaining} cards remaining for default LONG game, got ${roundStart.payload.deckRemaining}`);
+    // Default is 50 cards: (50-1)/2 = 24 cards each
+    const expectedCardsPerPlayer = Math.floor((50 - 1) / 2);
+    if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for default LONG game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);

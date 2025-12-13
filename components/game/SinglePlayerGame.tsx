@@ -14,7 +14,6 @@ interface SinglePlayerGameProps {
 const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) => {
   // State
   const [players, setPlayers] = useState<Player[]>([]);
-  const [drawPile, setDrawPile] = useState<CardData[]>([]);
   const [centerCard, setCenterCard] = useState<CardData | null>(null);
   const [gameState, setGameState] = useState<GameState>(GameState.PLAYING);
   const [penaltyUntil, setPenaltyUntil] = useState<number>(0);
@@ -77,17 +76,23 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
     // Note: Audio is started in Lobby.tsx during user gesture (required for iOS)
 
+    // Shuffle the deck
+    const shuffledDeck = shuffle([...deck]);
+
     // Setup Players
     const newPlayers: Player[] = [];
+    const playerCount = 1 + config.botCount;  // Human + bots
+
+    // Card distribution: 1 to center, rest divided equally, extras discarded
+    const cardsForPlayers = shuffledDeck.length - 1;  // -1 for center card
+    const cardsPerPlayer = Math.floor(cardsForPlayers / playerCount);
 
     // Human Player
     newPlayers.push({
       id: 'player',
       name: config.playerName,
       isBot: false,
-      score: 0,
-      hand: null,
-      collectedCards: 0
+      cardStack: []
     });
 
     // Bots - use human names, filter out player's name, shuffle
@@ -102,23 +107,23 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
         id: `bot-${i}`,
         name: shuffledNames[i % shuffledNames.length],
         isBot: true,
-        score: 0,
-        hand: null,
-        collectedCards: 0
+        cardStack: []
       });
     }
 
-    // Deal one card to each player
-    newPlayers.forEach(p => {
-      const card = deck.pop();
-      if (card) p.hand = card;
-    });
-
-    // Place one card in center
-    const center = deck.pop();
+    // Set center card first
+    const center = shuffledDeck.pop();
     setCenterCard(center || null);
 
-    setDrawPile(deck);
+    // Deal stacks to players
+    let cardIndex = 0;
+    newPlayers.forEach(p => {
+      p.cardStack = [];
+      for (let i = 0; i < cardsPerPlayer; i++) {
+        p.cardStack.push(shuffledDeck[cardIndex++]);
+      }
+    });
+
     setPlayers(newPlayers);
     setGameState(GameState.PLAYING);
     setMessage('Match the Center Card!');
@@ -143,7 +148,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
     // Schedule bots to find match
     players.forEach(player => {
-      if (player.isBot && player.hand) {
+      if (player.isBot && player.cardStack.length > 0) {
         scheduleBotMove(player, centerCard);
       }
     });
@@ -169,10 +174,11 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     if (gameState !== GameState.PLAYING) return;
 
     const winner = players.find(p => p.id === playerId);
-    if (!winner || !winner.hand) return;
+    if (!winner || winner.cardStack.length === 0) return;
 
+    const topCard = winner.cardStack[0];
     // Find the symbol that matched for the highlight
-    const matchSymbol = findMatch(winner.hand, targetCenterCard);
+    const matchSymbol = findMatch(topCard, targetCenterCard);
 
     // 1. Play Sound
     const isHuman = !winner.isBot;
@@ -185,50 +191,59 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
     setMessage(`${winner.name} found it!`);
 
-    // 3. Wait 2 seconds before dealing next card
+    // 3. Wait 2 seconds before moving to next round
     setTimeout(() => {
-      proceedToNextTurn(playerId, targetCenterCard);
+      proceedToNextTurn(playerId);
     }, 2000);
   };
 
-  const proceedToNextTurn = (winnerId: string, oldCenterCard: CardData) => {
+  const proceedToNextTurn = (winnerId: string) => {
+    let gameEnded = false;
+
     setPlayers(prevPlayers => {
       const winnerIndex = prevPlayers.findIndex(p => p.id === winnerId);
       if (winnerIndex === -1) return prevPlayers;
 
       const winner = prevPlayers[winnerIndex];
       const updatedPlayers = [...prevPlayers];
+
+      // Winner's top card goes to center, remove from their stack
+      const newStack = [...winner.cardStack];
+      const topCard = newStack.shift();  // Remove top card
+
       updatedPlayers[winnerIndex] = {
         ...winner,
-        score: winner.score + 1,
-        collectedCards: winner.collectedCards + 1,
-        hand: oldCenterCard // Winner takes center card
+        cardStack: newStack
       };
+
+      // Update center card to winner's old top card
+      if (topCard) {
+        setCenterCard(topCard);
+      }
+
+      // Check for game over: winner has no cards left
+      if (newStack.length === 0) {
+        gameEnded = true;
+        endGame(winnerId);
+      }
+
       return updatedPlayers;
     });
 
-    // Draw new center card
-    setDrawPile(prevPile => {
-      const newPile = [...prevPile];
-      if (newPile.length === 0) {
-        endGame();
-        return newPile;
-      }
-      const newCenter = newPile.pop();
-      setCenterCard(newCenter || null);
-      return newPile;
-    });
-
-    // Reset States
-    setMatchedSymbolId(null);
-    setGameState(GameState.PLAYING); // Resumes bot timers via useEffect
-    setMessage('Match the Center Card!');
+    // Only continue if game didn't end
+    if (!gameEnded) {
+      // Reset States
+      setMatchedSymbolId(null);
+      setGameState(GameState.PLAYING); // Resumes bot timers via useEffect
+      setMessage('Match the Center Card!');
+    }
   };
 
-  const endGame = () => {
+  const endGame = (winnerId?: string) => {
     setGameState(GameState.GAME_OVER);
     clearAllBotTimers();
-    setMessage('Game Over!');
+    const winner = winnerId ? players.find(p => p.id === winnerId) : null;
+    setMessage(winner ? `${winner.name} wins!` : 'Game Over!');
     stopBackgroundMusic();
   };
 
@@ -239,10 +254,11 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     if (now < penaltyUntil) return;
 
     const human = players.find(p => !p.isBot);
-    if (!human || !human.hand || !centerCard) return;
+    if (!human || human.cardStack.length === 0 || !centerCard) return;
 
+    const topCard = human.cardStack[0];
     // Check match
-    const inPlayerHand = human.hand.symbols.some(s => s.id === symbol.id);
+    const inPlayerHand = topCard.symbols.some(s => s.id === symbol.id);
     const inCenter = centerCard.symbols.some(s => s.id === symbol.id);
 
     if (inPlayerHand && inCenter) {
@@ -282,7 +298,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   };
 
   if (gameState === GameState.GAME_OVER) {
-    const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+    // Sort by cards remaining ascending (0 = winner)
+    const sortedPlayers = [...players].sort((a, b) => a.cardStack.length - b.cardStack.length);
     const winner = sortedPlayers[0];
     const isHumanWinner = winner.id === 'player';
 
@@ -292,7 +309,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
           <div className="shrink-0">
             <Trophy className={`w-24 h-24 mx-auto mb-4 ${isHumanWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
             <h2 className="text-4xl font-bold mb-2">{isHumanWinner ? 'You Won!' : `${winner.name} Wins!`}</h2>
-            <p className="text-gray-500 mb-6">Final Scores</p>
+            <p className="text-gray-500 mb-6">Final Standings</p>
           </div>
 
           <div className="space-y-3 mb-8 overflow-y-auto flex-1">
@@ -302,7 +319,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                   <span className="text-gray-400 w-6">#{idx + 1}</span>
                   <span>{p.name}</span>
                 </div>
-                <span className="text-indigo-600">{p.score} cards</span>
+                <span className={p.cardStack.length === 0 ? 'text-green-600' : 'text-indigo-600'}>
+                  {p.cardStack.length === 0 ? 'WINNER!' : `${p.cardStack.length} cards left`}
+                </span>
               </div>
             ))}
           </div>
@@ -352,10 +371,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
         <div className="bg-white shadow-sm h-12 shrink-0 px-2 md:px-4 flex justify-between items-center z-10">
           <div className="flex items-center gap-2 md:gap-4">
              <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-xs md:text-sm px-2 md:px-3 py-1 rounded hover:bg-slate-100 transition-colors">EXIT</button>
-             <div className="flex items-center gap-1 md:gap-2 bg-indigo-50 px-2 md:px-3 py-1 rounded-lg">
-               <span className="text-xs text-gray-500 uppercase font-bold hidden sm:inline">Pile</span>
-               <span className="font-bold text-indigo-700 text-sm">{drawPile.length}</span>
-             </div>
           </div>
           <div className="font-bold text-sm md:text-lg text-slate-700 truncate max-w-[40%]">{message}</div>
           <div className="flex items-center gap-2">
@@ -381,9 +396,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                 }`}
               >
                  <div className="relative">
-                   {bot.hand && (
+                   {bot.cardStack.length > 0 && (
                      <Card
-                       card={bot.hand}
+                       card={bot.cardStack[0]}
                        size={botCardSize}
                        layoutMode={config.cardDifficulty}
                        disabled
@@ -392,10 +407,11 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                      />
                    )}
                    <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow">
-                     {bot.score}
+                     {bot.cardStack.length}
                    </div>
                  </div>
                  <span className="text-xs font-bold mt-1 text-gray-500">{bot.name}</span>
+                 <span className="text-xs text-gray-400">{bot.cardStack.length} left</span>
                  {lastWinnerId === bot.id && <div className="text-xs text-green-600 font-bold animate-bounce">Got it!</div>}
               </div>
             ))}
@@ -409,9 +425,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-indigo-600 font-bold tracking-widest text-xs uppercase flex items-center gap-1 whitespace-nowrap">
                   <User size={12}/> {humanPlayer?.name || 'You'}
                </div>
-               {humanPlayer?.hand && (
+               {humanPlayer && humanPlayer.cardStack.length > 0 && (
                  <Card
-                   card={humanPlayer.hand}
+                   card={humanPlayer.cardStack[0]}
                    size={cardSize}
                    layoutMode={config.cardDifficulty}
                    onClickSymbol={handlePlayerClick}
@@ -428,7 +444,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                  </div>
                )}
                <div className="absolute -bottom-3 -right-3 bg-indigo-600 text-white text-base font-bold w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
-                  {humanPlayer?.score || 0}
+                  {humanPlayer?.cardStack.length ?? 0}
                </div>
             </div>
 

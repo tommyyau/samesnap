@@ -49,8 +49,7 @@ export interface ServerPlayer {
   connectionId: string;
   name: string;
   status: PlayerStatus;
-  score: number;
-  handCardId: number | null;
+  cardStack: number[];  // Array of card IDs, top card at index 0
   isHost: boolean;
   joinedAt: number;
   lastSeen: number;
@@ -60,8 +59,7 @@ export interface ClientPlayer {
   id: string;
   name: string;
   status: PlayerStatus;
-  score: number;
-  hasCard: boolean;
+  cardsRemaining: number;  // Cards left in player's stack (0 = winner)
   isHost: boolean;
   isYou: boolean;
 }
@@ -84,19 +82,16 @@ export interface ClientRoomState {
   phase: RoomPhase;
   players: ClientPlayer[];
   config: MultiplayerGameConfig | null;
-  deckRemaining: number;
   centerCard: CardData | null;
   yourCard: CardData | null;
   roundWinnerId: string | null;
   roundWinnerName: string | null;
   roundMatchedSymbolId: number | null;
-  roundNumber: number;
   countdown?: number;
   penaltyUntil?: number;      // Client-side computed: when penalty ends (local clock)
   penaltyRemainingMs?: number; // Server-sent: remaining penalty duration in ms (clock-skew safe)
   roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
-  gameEndReason?: 'deck_exhausted' | 'last_player_standing';  // Why the game ended
-  bonusAwarded?: number;      // Bonus points awarded (e.g., remaining deck cards for last player standing)
+  gameEndReason?: 'stack_emptied' | 'last_player_standing';  // Why the game ended
   rejoinWindowEndsAt?: number; // Timestamp when rejoin window ends (10s after game_over)
   playersWantRematch?: string[]; // IDs of players who clicked "Play Again"
 }
@@ -119,9 +114,7 @@ export interface Player {
   id: string;
   name: string;
   isBot: boolean;
-  score: number;
-  hand: CardData | null;
-  collectedCards: number;
+  cardStack: CardData[];  // Array of cards, top card at index 0
 }
 
 export interface GameConfig {

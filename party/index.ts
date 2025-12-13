@@ -19,14 +19,12 @@ export default class SameSnapRoom implements Party.Server {
   private players: Map<string, ServerPlayer> = new Map();
   private connectionToPlayerId: Map<string, string> = new Map();
   private hostId: string | null = null;
-  private deck: CardData[] = [];
-  private fullDeck: CardData[] = [];
+  private fullDeck: CardData[] = [];  // Original deck for card lookups
   private centerCard: CardData | null = null;
   private config: MultiplayerGameConfig | null = null;
-  private roundNumber: number = 0;
   private roundWinnerId: string | null = null;
   private roundMatchedSymbolId: number | null = null;
-  private roundsCompleted: number = 0;
+  private roundNumber: number = 0;  // For arbitration tracking
   private penalties: Map<string, number> = new Map();
   private pendingArbitration: {
     roundNumber: number;
@@ -50,8 +48,9 @@ export default class SameSnapRoom implements Party.Server {
   private rejoinWindowTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private rejoinWindowEndsAt: number | null = null;
   private playersWantRematch: Set<string> = new Set();
-  private lastGameEndReason: 'deck_exhausted' | 'last_player_standing' = 'deck_exhausted';
-  private lastBonusAwarded: number | undefined = undefined;
+  private lastGameEndReason: 'stack_emptied' | 'last_player_standing' = 'stack_emptied';
+  private lastWinnerId: string | null = null;
+  private lastWinnerName: string | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -197,8 +196,7 @@ export default class SameSnapRoom implements Party.Server {
       connectionId: conn.id,
       name: finalName,
       status: PlayerStatus.CONNECTED,
-      score: 0,
-      handCardId: null,
+      cardStack: [],
       isHost,
       joinedAt: Date.now(),
       lastSeen: Date.now(),
@@ -407,38 +405,61 @@ export default class SameSnapRoom implements Party.Server {
     const gameDuration = this.config?.gameDuration ?? GameDuration.LONG;
     const deckSize = Math.min(gameDuration, generatedDeck.length);
     this.fullDeck = generatedDeck.slice(0, deckSize);
-    this.deck = [...this.fullDeck];
     this.roundNumber = 0;
     this.penalties.clear();
 
-    // Deal cards to players
-    this.players.forEach(player => {
-      const card = this.deck.pop();
-      if (card) player.handCardId = card.id;
-      player.score = 0;
-    });
+    // Shuffle the deck
+    const shuffledDeck = [...this.fullDeck];
+    for (let i = shuffledDeck.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffledDeck[i], shuffledDeck[j]] = [shuffledDeck[j], shuffledDeck[i]];
+    }
 
-    // Set center card
-    this.centerCard = this.deck.pop() || null;
+    // Card distribution: 1 to center, rest divided equally, extras discarded
+    const playerCount = this.players.size;
+    const cardsForPlayers = shuffledDeck.length - 1;  // -1 for center card
+    const cardsPerPlayer = Math.floor(cardsForPlayers / playerCount);
+
+    // Set center card first (pop from end)
+    this.centerCard = shuffledDeck.pop() || null;
+
+    // Deal stacks to players
+    let cardIndex = 0;
+    this.players.forEach(player => {
+      player.cardStack = [];
+      for (let i = 0; i < cardsPerPlayer; i++) {
+        player.cardStack.push(shuffledDeck[cardIndex].id);
+        cardIndex++;
+      }
+    });
+    // Remaining cards (extras) are discarded - not used
+
     this.phase = RoomPhase.PLAYING;
     this.roundNumber = 1;
-    this.roundsCompleted = 0;
 
-    // Send round_start to each player with their personal card
+    // Send round_start to each player with their top card
     this.players.forEach((player, playerId) => {
-      const yourCard = this.getCardById(player.handCardId);
+      const topCardId = player.cardStack[0];
+      const yourCard = this.getCardById(topCardId);
       if (yourCard && this.centerCard) {
         this.sendToPlayer(playerId, {
           type: 'round_start',
           payload: {
             centerCard: this.centerCard,
             yourCard,
-            roundNumber: this.roundsCompleted + 1,
-            deckRemaining: this.getDrawPileRemaining()
+            yourCardsRemaining: player.cardStack.length,
+            allPlayersRemaining: this.getAllPlayersRemaining()
           }
         });
       }
     });
+  }
+
+  private getAllPlayersRemaining(): { playerId: string; cardsRemaining: number }[] {
+    return Array.from(this.players.entries()).map(([id, p]) => ({
+      playerId: id,
+      cardsRemaining: p.cardStack.length
+    }));
   }
 
   private handleMatchAttempt(connectionId: string, symbolId: number, clientTimestamp: number) {
@@ -449,7 +470,7 @@ export default class SameSnapRoom implements Party.Server {
     if (this.phase !== RoomPhase.PLAYING) return;
 
     const player = this.players.get(playerId);
-    if (!player || player.handCardId === null) return;
+    if (!player || player.cardStack.length === 0) return;  // No cards = can't play
 
     // Check penalty
     const penaltyUntil = this.penalties.get(playerId);
@@ -461,8 +482,9 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    // Validate match
-    const playerCard = this.getCardById(player.handCardId);
+    // Validate match using TOP card of player's stack
+    const topCardId = player.cardStack[0];
+    const playerCard = this.getCardById(topCardId);
     if (!playerCard || !this.centerCard) return;
 
     const inPlayerHand = playerCard.symbols.some(s => s.id === symbolId);
@@ -520,63 +542,72 @@ export default class SameSnapRoom implements Party.Server {
     this.phase = RoomPhase.ROUND_END;
     this.roundWinnerId = winnerId;
     this.roundMatchedSymbolId = symbolId;
-    winner.score += 1;
-    this.roundsCompleted += 1;
 
-    // Broadcast winner
+    // Winner's top card goes to center, remove from their stack
+    const oldTopCardId = winner.cardStack.shift();
+    if (oldTopCardId !== undefined) {
+      this.centerCard = this.getCardById(oldTopCardId);
+    }
+
+    // Broadcast winner with updated cards remaining
     this.broadcastToAll({
       type: 'round_winner',
-      payload: { winnerId, winnerName: winner.name, matchedSymbolId: symbolId }
+      payload: {
+        winnerId,
+        winnerName: winner.name,
+        matchedSymbolId: symbolId,
+        winnerCardsRemaining: winner.cardStack.length
+      }
     });
+
+    // Check for game over: winner has no cards left
+    if (winner.cardStack.length === 0) {
+      this.endGame('stack_emptied', winnerId, winner.name);
+      return;
+    }
 
     // After 2 seconds, next round (track timer so it can be cancelled if game ends early)
     this.roundEndTimeoutId = setTimeout(() => {
       this.roundEndTimeoutId = null;
-      this.nextRound(winnerId);
+      this.nextRound();
     }, 2000);
   }
 
-  private nextRound(lastWinnerId: string) {
+  private nextRound() {
     // Guard: don't proceed if game has ended or we're not in ROUND_END phase
     if (this.phase !== RoomPhase.ROUND_END) return;
+    if (!this.centerCard) return;
 
-    const winner = this.players.get(lastWinnerId);
-    if (!winner || !this.centerCard) return;
-
-    // Winner's hand becomes the old center card
-    const oldCenterId = this.centerCard.id;
-
-    // Draw new center
-    if (this.deck.length === 0) {
-      this.endGame();
-      return;
-    }
-
-    winner.handCardId = oldCenterId;
-    this.centerCard = this.deck.pop() || null;
     this.roundNumber++;
     this.phase = RoomPhase.PLAYING;
     this.roundWinnerId = null;
     this.roundMatchedSymbolId = null;
 
-    // Send new round to each player
+    // Send new round to each player with their current top card
     this.players.forEach((player, playerId) => {
-      const yourCard = this.getCardById(player.handCardId);
+      if (player.cardStack.length === 0) return;  // Player already won (shouldn't happen)
+
+      const topCardId = player.cardStack[0];
+      const yourCard = this.getCardById(topCardId);
       if (yourCard && this.centerCard) {
         this.sendToPlayer(playerId, {
           type: 'round_start',
           payload: {
             centerCard: this.centerCard,
             yourCard,
-            roundNumber: this.roundsCompleted + 1,
-            deckRemaining: this.getDrawPileRemaining()
+            yourCardsRemaining: player.cardStack.length,
+            allPlayersRemaining: this.getAllPlayersRemaining()
           }
         });
       }
     });
   }
 
-  private endGame(reason: 'deck_exhausted' | 'last_player_standing' = 'deck_exhausted', bonusAwarded?: number) {
+  private endGame(
+    reason: 'stack_emptied' | 'last_player_standing' = 'stack_emptied',
+    winnerId?: string,
+    winnerName?: string
+  ) {
     // Clear any pending round-end timer to prevent nextRound from firing
     if (this.roundEndTimeoutId) {
       clearTimeout(this.roundEndTimeoutId);
@@ -594,12 +625,18 @@ export default class SameSnapRoom implements Party.Server {
 
     this.phase = RoomPhase.GAME_OVER;
     this.lastGameEndReason = reason;
-    this.lastBonusAwarded = bonusAwarded;
     this.playersWantRematch.clear();
 
-    const finalScores = Array.from(this.players.values())
-      .map(p => ({ playerId: p.id, name: p.name, score: p.score }))
-      .sort((a, b) => b.score - a.score);
+    // Final standings sorted by cards remaining (ascending - 0 is best)
+    const finalStandings = Array.from(this.players.values())
+      .map(p => ({ playerId: p.id, name: p.name, cardsRemaining: p.cardStack.length }))
+      .sort((a, b) => a.cardsRemaining - b.cardsRemaining);
+
+    // Determine winner (explicit or from standings)
+    const actualWinnerId = winnerId || finalStandings[0]?.playerId;
+    const actualWinnerName = winnerName || finalStandings[0]?.name || 'Unknown';
+    this.lastWinnerId = actualWinnerId || null;
+    this.lastWinnerName = actualWinnerName;
 
     // Start 10-second rejoin window
     this.rejoinWindowEndsAt = Date.now() + REJOIN_WINDOW_MS;
@@ -609,7 +646,13 @@ export default class SameSnapRoom implements Party.Server {
 
     this.broadcastToAll({
       type: 'game_over',
-      payload: { finalScores, reason, bonusAwarded, rejoinWindowMs: REJOIN_WINDOW_MS }
+      payload: {
+        winnerId: actualWinnerId || '',
+        winnerName: actualWinnerName,
+        finalStandings,
+        reason,
+        rejoinWindowMs: REJOIN_WINDOW_MS
+      }
     });
   }
 
@@ -619,18 +662,17 @@ export default class SameSnapRoom implements Party.Server {
     // Find the sole remaining player
     const survivor = Array.from(this.players.values())[0];
     if (!survivor) {
-      console.log(`[Room ${this.room.id}] No survivor found, ending game with no bonus`);
+      console.log(`[Room ${this.room.id}] No survivor found, ending game`);
       this.endGame('last_player_standing');
       return;
     }
 
-    // Award all remaining deck cards to the survivor
-    const remainingCards = this.deck.length;
-    survivor.score += remainingCards;
+    // Survivor wins by default - set their stack to 0 (they "won")
+    survivor.cardStack = [];
 
-    console.log(`[Room ${this.room.id}] Survivor: ${survivor.name} (${survivor.id}), awarding ${remainingCards} bonus cards, total score: ${survivor.score}`);
+    console.log(`[Room ${this.room.id}] Survivor: ${survivor.name} (${survivor.id}) wins by last player standing`);
 
-    this.endGame('last_player_standing', remainingCards);
+    this.endGame('last_player_standing', survivor.id, survivor.name);
   }
 
   private handlePlayAgain(conn: Party.Connection) {
@@ -751,20 +793,19 @@ export default class SameSnapRoom implements Party.Server {
     // Reset all game state
     this.phase = RoomPhase.WAITING;
     this.hostId = null;
-    this.deck = [];
     this.fullDeck = [];
     this.centerCard = null;
     this.config = null;
     this.roundNumber = 0;
-    this.roundsCompleted = 0;
     this.roundWinnerId = null;
     this.roundMatchedSymbolId = null;
     this.penalties.clear();
     this.pendingArbitration = null;
     this.playersWantRematch.clear();
     this.rejoinWindowEndsAt = null;
-    this.lastGameEndReason = 'deck_exhausted';
-    this.lastBonusAwarded = undefined;
+    this.lastGameEndReason = 'stack_emptied';
+    this.lastWinnerId = null;
+    this.lastWinnerName = null;
 
     // Clear room timeout - will be set when first player joins
     if (this.roomTimeoutId) {
@@ -796,11 +837,9 @@ export default class SameSnapRoom implements Party.Server {
 
     // Reset game state
     this.phase = RoomPhase.WAITING;
-    this.deck = [];
     this.fullDeck = [];
     this.centerCard = null;
     this.roundNumber = 0;
-    this.roundsCompleted = 0;
     this.roundWinnerId = null;
     this.roundMatchedSymbolId = null;
     this.penalties.clear();
@@ -809,10 +848,9 @@ export default class SameSnapRoom implements Party.Server {
     this.playersWantRematch.clear();
     this.rejoinWindowEndsAt = null;
 
-    // Reset player state (scores, hands)
+    // Reset player state (clear card stacks)
     for (const [playerId, player] of this.players) {
-      player.score = 0;
-      player.handCardId = null;
+      player.cardStack = [];
     }
 
     // Ensure we have a host
@@ -949,28 +987,10 @@ export default class SameSnapRoom implements Party.Server {
       id: player.id,
       name: player.name,
       status: player.status,
-      score: player.score,
-      hasCard: player.handCardId !== null,
+      cardsRemaining: player.cardStack.length,
       isHost: player.isHost,
       isYou: player.id === forPlayerId,
     };
-  }
-
-  private getTotalDrawPile(): number {
-    if (!this.config) return 0;
-    return Math.max(0, this.fullDeck.length - this.players.size - 1);
-  }
-
-  private getDrawPileRemaining(): number {
-    const total = this.getTotalDrawPile();
-    if (
-      this.phase === RoomPhase.PLAYING ||
-      this.phase === RoomPhase.COUNTDOWN ||
-      this.phase === RoomPhase.ROUND_END
-    ) {
-      return Math.max(0, total - this.roundsCompleted);
-    }
-    return total;
   }
 
   private getPenaltyRemainingMs(playerId: string): number | undefined {
@@ -984,23 +1004,22 @@ export default class SameSnapRoom implements Party.Server {
     const player = this.players.get(playerId);
     if (!player) return;
 
-    const currentRoundNumber = this.phase === RoomPhase.WAITING ? 0 : this.roundsCompleted + 1;
+    // Get player's top card (if they have one)
+    const topCardId = player.cardStack.length > 0 ? player.cardStack[0] : null;
+
     const state: ClientRoomState = {
       roomCode: this.room.id,
       phase: this.phase,
       players: Array.from(this.players.values()).map(p => this.toClientPlayer(p, playerId)),
       config: this.config,
-      deckRemaining: this.getDrawPileRemaining(),
       centerCard: this.centerCard,
-      yourCard: this.getCardById(player.handCardId),
+      yourCard: this.getCardById(topCardId),
       roundWinnerId: this.roundWinnerId,
       roundWinnerName: this.roundWinnerId ? this.players.get(this.roundWinnerId)?.name || null : null,
       roundMatchedSymbolId: this.roundMatchedSymbolId,
-      roundNumber: currentRoundNumber,
       penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
       gameEndReason: this.phase === RoomPhase.GAME_OVER ? this.lastGameEndReason : undefined,
-      bonusAwarded: this.phase === RoomPhase.GAME_OVER ? this.lastBonusAwarded : undefined,
       rejoinWindowEndsAt: this.rejoinWindowEndsAt || undefined,
       playersWantRematch: this.playersWantRematch.size > 0 ? Array.from(this.playersWantRematch) : undefined,
     };

@@ -27,9 +27,9 @@ export type ServerMessage =
   | { type: 'player_reconnected'; payload: { playerId: string } }
   | { type: 'config_updated'; payload: { config: MultiplayerGameConfig } }  // Config changed by host
   | { type: 'countdown'; payload: { seconds: number } }
-  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; roundNumber: number; deckRemaining: number } }
-  | { type: 'round_winner'; payload: { winnerId: string; winnerName: string; matchedSymbolId: number } }
-  | { type: 'game_over'; payload: { finalScores: { playerId: string; name: string; score: number }[]; reason?: 'deck_exhausted' | 'last_player_standing'; bonusAwarded?: number; rejoinWindowMs?: number } }
+  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; yourCardsRemaining: number; allPlayersRemaining: { playerId: string; cardsRemaining: number }[] } }
+  | { type: 'round_winner'; payload: { winnerId: string; winnerName: string; matchedSymbolId: number; winnerCardsRemaining: number } }
+  | { type: 'game_over'; payload: { winnerId: string; winnerName: string; finalStandings: { playerId: string; name: string; cardsRemaining: number }[]; reason?: 'stack_emptied' | 'last_player_standing'; rejoinWindowMs?: number } }
   | { type: 'match_result'; payload: { success: boolean; reason?: string } }
   | { type: 'penalty'; payload: { serverTimestamp: number; durationMs: number; reason: string } }
   | { type: 'room_expired'; payload: { reason: string } }  // Room timed out

@@ -292,15 +292,19 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
             console.warn('round_start received before room_state');
             return null;
           }
+          // Update all players' cardsRemaining from allPlayersRemaining
+          const updatedPlayers = prev.players.map(p => {
+            const updated = message.payload.allPlayersRemaining.find(r => r.playerId === p.id);
+            return updated ? { ...p, cardsRemaining: updated.cardsRemaining } : p;
+          });
           return {
             ...prev,
             phase: RoomPhase.PLAYING,
             centerCard: message.payload.centerCard,
             yourCard: message.payload.yourCard,
-            roundNumber: message.payload.roundNumber,
             roundWinnerId: null,
             roundMatchedSymbolId: null,
-            deckRemaining: message.payload.deckRemaining ?? prev.deckRemaining,
+            players: updatedPlayers,
           };
         });
         break;
@@ -312,8 +316,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           roundWinnerId: message.payload.winnerId,
           roundWinnerName: message.payload.winnerName,
           roundMatchedSymbolId: message.payload.matchedSymbolId,
+          // Update winner's cards remaining (decrement by 1)
           players: prev.players.map(p =>
-            p.id === message.payload.winnerId ? { ...p, score: p.score + 1 } : p
+            p.id === message.payload.winnerId
+              ? { ...p, cardsRemaining: message.payload.winnerCardsRemaining }
+              : p
           )
         } : null);
         break;
@@ -331,20 +338,20 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           ...prev,
           phase: RoomPhase.GAME_OVER,
           gameEndReason: message.payload.reason,
-          bonusAwarded: message.payload.bonusAwarded,
           rejoinWindowEndsAt: message.payload.rejoinWindowMs ? Date.now() + message.payload.rejoinWindowMs : undefined,
           playersWantRematch: [],
-          players: message.payload.finalScores.map(s => {
+          players: message.payload.finalStandings.map(s => {
             const existingPlayer = prev.players.find(p => p.id === s.playerId);
-            return existingPlayer ? { ...existingPlayer, score: s.score } : {
-              id: s.playerId,
-              name: s.name,
-              status: 'connected' as const,
-              score: s.score,
-              hasCard: false,
-              isHost: false,
-              isYou: false
-            };
+            return existingPlayer
+              ? { ...existingPlayer, cardsRemaining: s.cardsRemaining }
+              : {
+                  id: s.playerId,
+                  name: s.name,
+                  status: 'connected' as const,
+                  cardsRemaining: s.cardsRemaining,
+                  isHost: false,
+                  isYou: false
+                };
           })
         } : null);
         break;

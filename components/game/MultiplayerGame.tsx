@@ -149,7 +149,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
 
   // Game Over screen
   if (roomState.phase === RoomPhase.GAME_OVER) {
-    const sortedPlayers = [...roomState.players].sort((a, b) => b.score - a.score);
+    // Sort by cards remaining ascending (0 = winner)
+    const sortedPlayers = [...roomState.players].sort((a, b) => a.cardsRemaining - b.cardsRemaining);
     const winner = sortedPlayers[0];
     const isYouWinner = winner?.isYou;
     const isLastPlayerStanding = roomState.gameEndReason === 'last_player_standing';
@@ -166,15 +167,12 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
           {isLastPlayerStanding && isYouWinner ? (
             <>
               <h2 className="text-4xl font-bold mb-2">Last One Standing!</h2>
-              <p className="text-gray-500 mb-2">Everyone else left - You win!</p>
-              {roomState.bonusAwarded !== undefined && roomState.bonusAwarded > 0 && (
-                <p className="text-green-600 font-bold mb-6">+{roomState.bonusAwarded} bonus cards awarded</p>
-              )}
+              <p className="text-gray-500 mb-6">Everyone else left - You win!</p>
             </>
           ) : (
             <>
               <h2 className="text-4xl font-bold mb-2">{isYouWinner ? 'You Won!' : `${winner?.name} Wins!`}</h2>
-              <p className="text-gray-500 mb-6">Final Scores</p>
+              <p className="text-gray-500 mb-6">Final Standings</p>
             </>
           )}
 
@@ -189,7 +187,9 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                     {p.isYou && <span className="text-xs text-indigo-500">(You)</span>}
                     {wantsRematch && <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Ready</span>}
                   </div>
-                  <span className="text-indigo-600">{p.score} cards</span>
+                  <span className={p.cardsRemaining === 0 ? 'text-green-600' : 'text-indigo-600'}>
+                    {p.cardsRemaining === 0 ? 'WINNER!' : `${p.cardsRemaining} cards left`}
+                  </span>
                 </div>
               );
             })}
@@ -272,7 +272,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
             <div className="text-center animate-bounce">
               <div className="text-8xl mb-4">🎉</div>
               <div className="text-6xl font-black text-white drop-shadow-lg">YOU GOT IT!</div>
-              <div className="text-2xl text-green-100 mt-4 font-bold">+1 Point</div>
+              <div className="text-2xl text-green-100 mt-4 font-bold">-1 Card</div>
             </div>
           ) : (
             // OPPONENT WON - Smaller notification
@@ -293,10 +293,6 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
           <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-sm px-3 py-1 rounded hover:bg-slate-100">
             EXIT
           </button>
-          <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1 rounded-lg">
-            <span className="text-xs text-gray-500 uppercase font-bold">Cards Left</span>
-            <span className="font-bold text-indigo-700">{roomState.deckRemaining}</span>
-          </div>
           <div className="flex items-center gap-1 text-xs text-gray-400">
             <Wifi size={12} /> {latency}ms
           </div>
@@ -320,10 +316,11 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                   {player.name[0].toUpperCase()}
                 </div>
                 <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
-                  {player.score}
+                  {player.cardsRemaining}
                 </div>
               </div>
               <span className="text-xs font-bold mt-1 text-gray-500">{player.name}</span>
+              <span className="text-xs text-gray-400">{player.cardsRemaining} left</span>
               {roomState.roundWinnerId === player.id && <div className="text-xs text-green-600 font-bold">Got it!</div>}
             </div>
           ))}
@@ -356,7 +353,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               </div>
             )}
             <div className="absolute -bottom-4 -right-4 bg-indigo-600 text-white text-lg font-bold w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
-              {you?.score || 0}
+              {you?.cardsRemaining ?? 0}
             </div>
           </div>
 
