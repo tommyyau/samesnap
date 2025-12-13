@@ -374,8 +374,12 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         setRoomState(prev => prev ? {
           ...prev,
           config: message.payload.config,
-          targetPlayers: message.payload.config.targetPlayers,
         } : null);
+        break;
+
+      case 'need_more_players':
+        // Timer expired but not enough players - timer will restart
+        console.log('Need more players:', message.payload.message);
         break;
 
       case 'room_expired':

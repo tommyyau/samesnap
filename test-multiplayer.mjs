@@ -376,8 +376,7 @@ async function runConfigTests() {
       type: 'set_config',
       payload: {
         config: {
-          cardDifficulty: 'HARD',
-          targetPlayers: 2
+          cardDifficulty: 'HARD'
         }
       }
     }));
@@ -391,28 +390,6 @@ async function runConfigTests() {
     cleanup(host);
   });
 
-  await test('Host can set target player count', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: {
-        config: {
-          cardDifficulty: 'EASY',
-          targetPlayers: 4
-        }
-      }
-    }));
-
-    const configMsg = await waitForMessage(host, 'config_updated', 2000);
-    if (configMsg.payload.config.targetPlayers !== 4) {
-      throw new Error(`Expected 4, got ${configMsg.payload.config.targetPlayers}`);
-    }
-
-    cleanup(host);
-  });
-
   await test('Config supports all three difficulties (EASY, MEDIUM, HARD)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
@@ -420,7 +397,7 @@ async function runConfigTests() {
     for (const difficulty of ['EASY', 'MEDIUM', 'HARD']) {
       host.ws.send(JSON.stringify({
         type: 'set_config',
-        payload: { config: { cardDifficulty: difficulty, targetPlayers: 2 } }
+        payload: { config: { cardDifficulty: difficulty } }
       }));
       const msg = await waitForMessage(host, 'config_updated', 2000);
       if (msg.payload.config.cardDifficulty !== difficulty) {
@@ -447,7 +424,7 @@ async function runGameFlowTests() {
     // Set target to 2 players
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await new Promise(r => setTimeout(r, 100));
@@ -469,139 +446,15 @@ async function runGameFlowTests() {
     cleanup(host, guest);
   });
 
-  await test('Auto-start requires minimum 2 players even if targetPlayers=1', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    // Set target to 1 player (should be ignored - minimum is 2)
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 1 } }
-    }));
-
-    // Wait a bit to see if countdown starts (it should NOT)
-    await new Promise(r => setTimeout(r, 500));
-
-    // Check that we're still in waiting phase
-    if (host.roomState?.phase !== 'waiting') {
-      throw new Error(`Expected phase=waiting with 1 player, got ${host.roomState?.phase}`);
-    }
-
-    // Check no countdown or round_start messages were received
-    const badMessages = host.messages.filter(m =>
-      m.type === 'countdown' || m.type === 'round_start'
-    );
-    if (badMessages.length > 0) {
-      throw new Error(`Server should NOT start game with 1 player, but received: ${badMessages.map(m => m.type).join(', ')}`);
-    }
-
-    // Now add a second player - game should auto-start now
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Wait for countdown (now we have 2 players, should work)
-    const countdown = await waitForMessage(host, 'countdown', 3000);
-    if (typeof countdown.payload.seconds !== 'number' || countdown.payload.seconds < 0) {
-      throw new Error('Game should auto-start once 2 players join');
-    }
-
-    cleanup(host, guest);
-  });
-
-  await test('Server clamps targetPlayers=1 to 2 in config_updated', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    // Host tries to set targetPlayers=1 (should be clamped to 2)
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 1 } }
-    }));
-
-    // Wait for config_updated message
-    const configMsg = await waitForMessage(host, 'config_updated', 2000);
-
-    // Server should have clamped to 2
-    if (configMsg.payload.config.targetPlayers !== 2) {
-      throw new Error(`Expected targetPlayers=2 (clamped), got ${configMsg.payload.config.targetPlayers}`);
-    }
-
-    // Also verify room_state reflects clamped value
-    // Request fresh room_state by reconnecting or checking existing state
-    // The host's roomState should have been updated by the config_updated handler
-    await new Promise(r => setTimeout(r, 100));
-
-    // Join a second player to get fresh room_state
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Guest's room_state should show clamped config
-    if (guest.roomState?.config?.targetPlayers !== 2) {
-      throw new Error(`Guest room_state has wrong targetPlayers: ${guest.roomState?.config?.targetPlayers}`);
-    }
-
-    cleanup(host, guest);
-  });
-
-  await test('Server clamps targetPlayers=0 to 2 in config_updated', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    // Host tries to set targetPlayers=0 (should be clamped to 2)
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 0 } }
-    }));
-
-    const configMsg = await waitForMessage(host, 'config_updated', 2000);
-    if (configMsg.payload.config.targetPlayers !== 2) {
-      throw new Error(`Expected targetPlayers=2 (clamped from 0), got ${configMsg.payload.config.targetPlayers}`);
-    }
-
-    cleanup(host);
-  });
-
-  await test('room_state.targetPlayers reflects clamped value', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    // Set invalid targetPlayers
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 1 } }
-    }));
-
-    await waitForMessage(host, 'config_updated', 2000);
-
-    // Add second player - their room_state.targetPlayers should be 2
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Check both config.targetPlayers AND the top-level targetPlayers field
-    if (guest.roomState?.config?.targetPlayers !== 2) {
-      throw new Error(`room_state.config.targetPlayers should be 2, got ${guest.roomState?.config?.targetPlayers}`);
-    }
-    if (guest.roomState?.targetPlayers !== 2) {
-      throw new Error(`room_state.targetPlayers should be 2, got ${guest.roomState?.targetPlayers}`);
-    }
-
-    cleanup(host, guest);
-  });
-
-  await test('Manual start with targetPlayers=1 uses clamped config', async () => {
+  await test('Host can manually start game', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
 
-    // Set target high to prevent auto-start
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 8 } }
-    }));
-    await waitForMessage(host, 'config_updated', 2000);
-
-    // Manually start with targetPlayers=1 in the start_game payload
-    // Server should clamp and still start correctly
+    // Host starts game manually
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 1 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Should get countdown and eventually round_start
@@ -627,7 +480,7 @@ async function runGameFlowTests() {
     // Set target high so it doesn't auto-start
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'MEDIUM', targetPlayers: 8 } }
+      payload: { config: { cardDifficulty: 'MEDIUM' } }
     }));
 
     await new Promise(r => setTimeout(r, 200));
@@ -635,7 +488,7 @@ async function runGameFlowTests() {
     // Manually start
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'MEDIUM', targetPlayers: 8 } }
+      payload: { config: { cardDifficulty: 'MEDIUM' } }
     }));
 
     const countdown = await waitForMessage(host, 'countdown', 3000);
@@ -654,7 +507,7 @@ async function runGameFlowTests() {
     // Start game immediately
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for round_start
@@ -676,7 +529,7 @@ async function runGameFlowTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
@@ -719,7 +572,7 @@ async function runMatchTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for round start
@@ -762,7 +615,7 @@ async function runMatchTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -896,10 +749,10 @@ async function runLifecycleTests() {
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
 
-    // Host starts game with targetPlayers=2
+    // Host starts game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for countdown to start
@@ -1152,7 +1005,7 @@ async function runLifecycleTests() {
     // Set target to 2 players - normally this would auto-start
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for countdown to start (since we have 2 players)
@@ -1178,7 +1031,7 @@ async function runLifecycleTests() {
 
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'config_updated', 2000);
@@ -1203,7 +1056,7 @@ async function runLifecycleTests() {
     // Set high target so no auto-start
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 8 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
     await waitForMessage(host, 'config_updated', 2000);
 
@@ -1215,7 +1068,7 @@ async function runLifecycleTests() {
     // Host tries to manually start - should fail
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Should receive error, not countdown
@@ -1245,7 +1098,7 @@ async function runLifecycleTests() {
     // Set target to 2, countdown starts
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for countdown to start
@@ -1362,7 +1215,7 @@ async function runLastPlayerStandingTests() {
     // Start game with low target to auto-start
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for game to start
@@ -1411,7 +1264,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for round 1
@@ -1478,7 +1331,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for round start
@@ -1511,7 +1364,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for round start
@@ -1552,7 +1405,7 @@ async function runLastPlayerStandingTests() {
     // Start game with 3 players
     p1.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for game to start
@@ -1586,7 +1439,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for game to start
@@ -1634,7 +1487,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for game to start (guest perspective)
@@ -1678,7 +1531,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1709,7 +1562,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Just verify we can start a game (full game test is too long)
@@ -1737,7 +1590,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for game to start
@@ -1768,7 +1621,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const hostRoundStart = await waitForMessage(host, 'round_start', 10000);
@@ -1803,7 +1656,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1837,7 +1690,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1885,7 +1738,7 @@ async function runRejoinTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1945,7 +1798,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2005,7 +1858,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2065,7 +1918,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2097,7 +1950,7 @@ async function runGameOverExitTests() {
     // Start game with 4 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 4 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2159,7 +2012,7 @@ async function runGameOverExitTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2216,7 +2069,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2282,7 +2135,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2320,7 +2173,7 @@ async function runGameOverExitTests() {
     // Start game with 4 players so we have enough for the test
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 4 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);

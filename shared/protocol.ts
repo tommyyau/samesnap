@@ -33,6 +33,7 @@ export type ServerMessage =
   | { type: 'match_result'; payload: { success: boolean; reason?: string } }
   | { type: 'penalty'; payload: { serverTimestamp: number; durationMs: number; reason: string } }
   | { type: 'room_expired'; payload: { reason: string } }  // Room timed out
+  | { type: 'need_more_players'; payload: { message: string } }  // Timer expired but not enough players
   | { type: 'host_changed'; payload: { playerId: string } }
   | { type: 'error'; payload: { code: string; message: string } }
   | { type: 'pong'; payload: { serverTimestamp: number; clientTimestamp: number } }

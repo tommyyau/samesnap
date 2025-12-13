@@ -70,7 +70,6 @@ export interface MatchAttempt {
 
 export interface MultiplayerGameConfig {
   cardDifficulty: CardDifficulty;
-  targetPlayers: number;  // How many players needed to auto-start (1-8)
 }
 
 export interface ClientRoomState {
@@ -89,7 +88,6 @@ export interface ClientRoomState {
   penaltyUntil?: number;      // Client-side computed: when penalty ends (local clock)
   penaltyRemainingMs?: number; // Server-sent: remaining penalty duration in ms (clock-skew safe)
   roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
-  targetPlayers?: number;     // How many players needed to start
   gameEndReason?: 'deck_exhausted' | 'last_player_standing';  // Why the game ended
   bonusAwarded?: number;      // Bonus points awarded (e.g., remaining deck cards for last player standing)
   rejoinWindowEndsAt?: number; // Timestamp when rejoin window ends (10s after game_over)

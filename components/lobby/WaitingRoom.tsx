@@ -14,7 +14,6 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [copied, setCopied] = useState(false);
   // Local state for host controls - always synced from server config when it changes
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
-  const [targetPlayers, setTargetPlayers] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -37,23 +36,14 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   useEffect(() => {
     if (roomState?.config) {
       setCardDifficulty(roomState.config.cardDifficulty);
-      setTargetPlayers(roomState.config.targetPlayers);
     }
-  }, [roomState?.config?.cardDifficulty, roomState?.config?.targetPlayers]);
+  }, [roomState?.config?.cardDifficulty]);
 
   // Handler for when host explicitly changes card difficulty
   const handleCardDifficultyChange = (newDifficulty: CardDifficulty) => {
     setCardDifficulty(newDifficulty);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty: newDifficulty, targetPlayers: targetPlayers ?? 2 });
-    }
-  };
-
-  // Handler for when host explicitly changes target players
-  const handleTargetPlayersChange = (newTarget: number) => {
-    setTargetPlayers(newTarget);
-    if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty: cardDifficulty ?? CardDifficulty.EASY, targetPlayers: newTarget });
+      setConfig({ cardDifficulty: newDifficulty });
     }
   };
 
@@ -85,7 +75,6 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const handleStartGame = () => {
     startGame({
       cardDifficulty: cardDifficulty ?? CardDifficulty.EASY,
-      targetPlayers: targetPlayers ?? 2
     });
   };
 
@@ -95,8 +84,6 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   };
 
   const currentPlayers = roomState?.players.length || 0;
-  const effectiveTarget = roomState?.targetPlayers ?? targetPlayers ?? 2;
-  const playersNeeded = Math.max(0, effectiveTarget - currentPlayers);
   const canStart = isHost && currentPlayers >= 2;
 
   return (
@@ -122,22 +109,16 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
       <div className={`flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4 ${isMobilePortrait ? 'blur-sm' : ''}`}>
         <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full">
-        {/* Connection & Timer Status */}
+        {/* Connection Status */}
         <div className="flex justify-between items-center mb-4">
           <div className={`flex items-center gap-2 text-sm ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
             {isConnected ? <Wifi size={16} /> : <WifiOff size={16} />}
             {isConnected ? `Connected (${latency}ms)` : 'Disconnected'}
           </div>
-          {timeLeft !== null && timeLeft > 0 && (
-            <div className="flex items-center gap-1 text-sm text-orange-600 font-bold">
-              <Clock size={16} />
-              {timeLeft}s
-            </div>
-          )}
         </div>
 
         {/* Room Code */}
-        <div className="text-center mb-6">
+        <div className="text-center mb-4">
           <p className="text-gray-500 text-sm mb-1">ROOM CODE</p>
           <div
             onClick={copyRoomCode}
@@ -149,24 +130,40 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           <p className="text-gray-400 text-xs mt-1">Click to copy</p>
         </div>
 
-        {/* Waiting Message */}
-        {playersNeeded > 0 && (
-          <div className="text-center mb-4 p-3 bg-indigo-50 rounded-xl">
-            <div className="flex items-center justify-center gap-2 text-indigo-700 font-bold">
-              <Users size={20} />
-              Waiting for {playersNeeded} more player{playersNeeded !== 1 ? 's' : ''}...
+        {/* Prominent Countdown Timer */}
+        {timeLeft !== null && timeLeft > 0 && (
+          <div className="text-center mb-4 p-4 bg-gradient-to-r from-orange-100 to-yellow-100 rounded-2xl border-2 border-orange-300">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <Clock size={32} className="text-orange-600 animate-pulse" />
+              <span className="text-4xl font-black text-orange-600">{timeLeft}s</span>
             </div>
-            <p className="text-xs text-indigo-500 mt-1">
-              Game starts automatically when {effectiveTarget} player{effectiveTarget !== 1 ? 's join' : ' joins'}
+            <p className="text-sm text-orange-700 font-medium">
+              Game starts when timer ends
+            </p>
+            <p className="text-xs text-orange-500 mt-1">
+              {isHost ? 'Or click "Start Now" with 2+ players' : 'Host can start early with 2+ players'}
             </p>
           </div>
         )}
 
-        {playersNeeded === 0 && currentPlayers >= effectiveTarget && (
-          <div className="text-center mb-4 p-3 bg-green-50 rounded-xl">
+        {/* Status Messages */}
+        {currentPlayers < 2 && (
+          <div className="text-center mb-4 p-3 bg-red-50 rounded-xl border border-red-200">
+            <div className="flex items-center justify-center gap-2 text-red-700 font-bold">
+              <Users size={20} />
+              Need at least 1 friend to play!
+            </div>
+            <p className="text-xs text-red-500 mt-1">
+              Share the room code above
+            </p>
+          </div>
+        )}
+
+        {currentPlayers >= 2 && (
+          <div className="text-center mb-4 p-3 bg-green-50 rounded-xl border border-green-200">
             <div className="flex items-center justify-center gap-2 text-green-700 font-bold">
               <Check size={20} />
-              All players joined! Starting soon...
+              Ready to play! ({currentPlayers} player{currentPlayers !== 1 ? 's' : ''})
             </div>
           </div>
         )}
@@ -174,7 +171,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
         {/* Players List */}
         <div className="mb-6">
           <p className="text-sm font-bold text-gray-700 mb-2">
-            Players ({currentPlayers}/{effectiveTarget})
+            Players ({currentPlayers}/8 max)
           </p>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {roomState?.players.map((player) => (
@@ -197,75 +194,50 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           </div>
         </div>
 
-        {/* Game Settings (Host Only) */}
+        {/* Game Settings (Host Only) - Card Layout */}
         {isHost && (
-          <>
-            {/* Target Players */}
-            <div className="mb-4">
-              <p className="text-sm font-bold text-gray-700 mb-2">Players to Start</p>
-              <div className="flex justify-between items-center bg-gray-100 p-2 rounded-xl">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                  <button
-                    key={num}
-                    type="button"
-                    onClick={() => handleTargetPlayersChange(num)}
-                    className={`w-8 h-8 rounded-lg font-bold text-sm transition-all ${
-                      targetPlayers === num
-                        ? 'bg-indigo-600 text-white shadow-lg scale-110'
-                        : 'text-gray-500 hover:bg-gray-200'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
+          <div className="mb-6">
+            <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleCardDifficultyChange(CardDifficulty.EASY)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  cardDifficulty === CardDifficulty.EASY
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Easy
+              </button>
+              <button
+                onClick={() => handleCardDifficultyChange(CardDifficulty.MEDIUM)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  cardDifficulty === CardDifficulty.MEDIUM
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Medium
+              </button>
+              <button
+                onClick={() => handleCardDifficultyChange(CardDifficulty.HARD)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  cardDifficulty === CardDifficulty.HARD
+                    ? 'bg-red-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Hard
+              </button>
             </div>
-
-            {/* Card Layout */}
-            <div className="mb-6">
-              <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => handleCardDifficultyChange(CardDifficulty.EASY)}
-                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                    cardDifficulty === CardDifficulty.EASY
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Easy
-                </button>
-                <button
-                  onClick={() => handleCardDifficultyChange(CardDifficulty.MEDIUM)}
-                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                    cardDifficulty === CardDifficulty.MEDIUM
-                      ? 'bg-orange-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Medium
-                </button>
-                <button
-                  onClick={() => handleCardDifficultyChange(CardDifficulty.HARD)}
-                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                    cardDifficulty === CardDifficulty.HARD
-                      ? 'bg-red-500 text-white'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  Hard
-                </button>
-              </div>
-            </div>
-          </>
+          </div>
         )}
 
         {/* Non-host sees config summary */}
         {!isHost && roomState?.config && (
           <div className="mb-6 p-3 bg-gray-50 rounded-xl">
             <p className="text-sm text-gray-500">
-              <span className="font-semibold">Target:</span> {roomState.config.targetPlayers} players |{' '}
-              <span className="font-semibold">Layout:</span> {
+              <span className="font-semibold">Card Layout:</span> {
                 roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' :
                 roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' : 'Hard'
               }

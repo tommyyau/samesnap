@@ -246,7 +246,7 @@ async function runFullGameTests() {
     // Start game immediately
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // Wait for first round
@@ -306,7 +306,7 @@ async function runFullGameTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -385,7 +385,7 @@ async function runRoundTransitionTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
@@ -417,7 +417,7 @@ async function runRoundTransitionTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const round1 = await waitForMessage(host, 'round_start', 10000);
@@ -447,7 +447,7 @@ async function runRoundTransitionTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const round1 = await waitForMessage(host, 'round_start', 10000);
@@ -480,7 +480,7 @@ async function runRoundTransitionTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -521,7 +521,7 @@ async function runNotificationTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -551,7 +551,7 @@ async function runNotificationTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -578,7 +578,7 @@ async function runNotificationTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -606,7 +606,7 @@ async function runNotificationTests() {
 
     p1.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(p1, 'round_start', 10000);
@@ -668,7 +668,7 @@ async function runArbitrationTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -714,7 +714,7 @@ async function runArbitrationTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -784,7 +784,7 @@ async function runErrorHandlingTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -810,14 +810,14 @@ async function runErrorHandlingTests() {
     // Set target high so auto-start doesn't trigger
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 8 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
     await sleep(100);
 
     // Guest tries to start
     guest.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const error = await waitForMessage(guest, 'error', 2000);
@@ -835,7 +835,7 @@ async function runErrorHandlingTests() {
 
     guest.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'HARD', targetPlayers: 4 } }
+      payload: { config: { cardDifficulty: 'HARD' } }
     }));
 
     const error = await waitForMessage(guest, 'error', 2000);
@@ -853,7 +853,7 @@ async function runErrorHandlingTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -892,14 +892,14 @@ async function runErrorHandlingTests() {
     // Set target to 8 so auto-start won't trigger
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 8 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
     await sleep(100);
 
     // Try to start with just 1 player
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 1 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     const error = await waitForMessage(host, 'error', 2000);
@@ -981,7 +981,7 @@ async function runDisconnectTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1008,7 +1008,7 @@ async function runDisconnectTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1094,7 +1094,7 @@ async function runScoreTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1139,7 +1139,7 @@ async function runScoreTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1218,7 +1218,7 @@ async function runMultiPlayerTests() {
 
     p1.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 3 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // All 3 should receive round_start
@@ -1262,7 +1262,7 @@ async function runMultiPlayerTests() {
 
     players[0].ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 4 } }
+      payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
     // All should get round_start

@@ -195,7 +195,6 @@ class HookSimulator {
           this.roomState = {
             ...this.roomState,
             config: message.payload.config,
-            targetPlayers: message.payload.config.targetPlayers,
           };
         }
         break;
@@ -241,8 +240,7 @@ async function testRoomStateMessage() {
         players: [
           { id: 'p1', name: 'Host', isHost: true, isYou: true, score: 0, status: 'connected' }
         ],
-        config: { cardDifficulty: 'EASY', targetPlayers: 2 },
-        targetPlayers: 2
+        config: { cardDifficulty: 'EASY' }
       }
     });
 
@@ -840,8 +838,7 @@ async function testFullFlowSimulation() {
         roomCode: 'TEST',
         phase: 'WAITING',
         players: [{ id: 'me', name: 'Me', isHost: true, isYou: true, score: 0, status: 'connected' }],
-        config: { cardDifficulty: 'EASY', targetPlayers: 2 },
-        targetPlayers: 2
+        config: { cardDifficulty: 'EASY' }
       }
     });
     if (hook.roomState.phase !== 'WAITING') throw new Error('Step 1: Should be WAITING');

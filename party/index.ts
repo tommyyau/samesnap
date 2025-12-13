@@ -9,7 +9,6 @@ import { SYMBOLS_HARD } from "../constants";
 import { CardDifficulty } from "../shared/types";
 
 const PENALTY_DURATION = 3000;
-const DEFAULT_TARGET_PLAYERS = 8; // High default to prevent accidental auto-start
 const ARBITRATION_WINDOW_MS = 100;
 const RECONNECT_GRACE_PERIOD = 5000;  // 5 seconds - quick reconnect for network glitches
 const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
@@ -86,9 +85,8 @@ export default class SameSnapRoom implements Party.Server {
     // During countdown, check if we still have enough connected players
     if (this.phase === RoomPhase.COUNTDOWN) {
       const connectedCount = this.getConnectedPlayerCount();
-      // Enforce minimum of 2 players for multiplayer
-      const requiredPlayers = Math.max(2, this.config?.targetPlayers ?? 2);
-      if (connectedCount < requiredPlayers) {
+      // Minimum 2 players for multiplayer
+      if (connectedCount < 2) {
         this.cancelCountdown();
       }
     }
@@ -212,15 +210,15 @@ export default class SameSnapRoom implements Party.Server {
     if (isHost) {
       this.hostId = playerId;
 
-      // Initialize default config so auto-start works immediately
+      // Initialize default config
       this.config = {
         cardDifficulty: CardDifficulty.EASY,
-        targetPlayers: DEFAULT_TARGET_PLAYERS,
       };
 
       this.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
 
       // Start room timeout when first player joins
+      // When timer expires, game auto-starts with whoever is here (if 2+ players)
       this.startRoomTimeout();
     } else {
       // Refresh room timeout when additional players join
@@ -234,10 +232,7 @@ export default class SameSnapRoom implements Party.Server {
     // Send full state to new player
     this.sendRoomState(playerId);
 
-    // Check if we've reached target players and should auto-start
-    // Delay slightly to ensure room_state message is received before countdown starts
-    // This fixes a race condition where countdown can arrive before room_state
-    setTimeout(() => this.checkAutoStart(), 50);
+    // No auto-start on join - game starts when timer expires or host clicks Start
   }
 
   private startRoomTimeout() {
@@ -265,36 +260,19 @@ export default class SameSnapRoom implements Party.Server {
   private handleRoomExpired() {
     if (this.phase !== RoomPhase.WAITING) return; // Don't expire if game started
 
-    // Notify all players
-    this.broadcastToAll({
-      type: 'room_expired',
-      payload: { reason: 'Room timed out - not enough players joined in time' }
-    });
-
-    // Close all connections
-    for (const conn of this.room.getConnections()) {
-      conn.close();
-    }
-  }
-
-  private checkAutoStart() {
-    if (this.phase !== RoomPhase.WAITING) return;
-    if (!this.config) return;
-
-    // Enforce minimum of 2 players - multiplayer games can't start with just 1
-    // Use connected count, not total players (disconnected players in grace period shouldn't count)
-    const requiredPlayers = Math.max(2, this.config.targetPlayers);
     const connectedCount = this.getConnectedPlayerCount();
-    if (connectedCount >= requiredPlayers) {
-      // Cancel room timeout since we're starting
-      if (this.roomTimeoutId) {
-        clearTimeout(this.roomTimeoutId);
-        this.roomTimeoutId = null;
-      }
-      this.roomExpiresAt = null;
 
-      // Auto-start the game
+    if (connectedCount >= 2) {
+      // Start the game with whoever is here
       this.startCountdown();
+    } else {
+      // Not enough players - notify and restart timer
+      this.broadcastToAll({
+        type: 'need_more_players',
+        payload: { message: 'Need at least 1 friend to start! Share the room code.' }
+      });
+      // Restart the 60 second timer
+      this.startRoomTimeout();
     }
   }
 
@@ -317,21 +295,14 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    // Clamp targetPlayers to minimum of 2 - multiplayer requires at least 2 players
-    const clampedConfig: MultiplayerGameConfig = {
-      ...config,
-      targetPlayers: Math.max(2, config.targetPlayers),
-    };
-    this.config = clampedConfig;
+    // Config only contains cardDifficulty now
+    this.config = config;
 
-    // Broadcast clamped config to all players so UI stays in sync
+    // Broadcast config to all players so UI stays in sync
     this.broadcastToAll({
       type: 'config_updated',
-      payload: { config: clampedConfig }
+      payload: { config }
     });
-
-    // Check if we should auto-start now
-    this.checkAutoStart();
   }
 
   private handleStartGame(conn: Party.Connection, config: MultiplayerGameConfig) {
@@ -355,11 +326,8 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    // Clamp targetPlayers to minimum of 2 for consistency
-    this.config = {
-      ...config,
-      targetPlayers: Math.max(2, config.targetPlayers),
-    };
+    // Config only contains cardDifficulty now
+    this.config = config;
     this.startCountdown();
   }
 
@@ -387,11 +355,9 @@ export default class SameSnapRoom implements Party.Server {
         this.countdownTimeoutId = setTimeout(tick, 1000);
       } else {
         this.countdownTimeoutId = null;
-        // Guard: only start if we still have enough connected players (enforce minimum of 2)
-        // Use connected count, not total players (disconnected players in grace period shouldn't count)
-        const requiredPlayers = Math.max(2, this.config?.targetPlayers ?? 2);
+        // Guard: only start if we still have at least 2 connected players
         const connectedCount = this.getConnectedPlayerCount();
-        if (connectedCount >= requiredPlayers) {
+        if (connectedCount >= 2) {
           this.startGame();
         } else {
           // Not enough players, return to waiting
@@ -401,8 +367,6 @@ export default class SameSnapRoom implements Party.Server {
           this.startRoomTimeout();
           // Broadcast fresh room_state so clients have updated phase and roomExpiresAt
           this.broadcastRoomState();
-          // Re-check auto-start in case conditions are still met (e.g., targetPlayers was lowered)
-          setTimeout(() => this.checkAutoStart(), 50);
         }
       }
     };
@@ -1023,7 +987,6 @@ export default class SameSnapRoom implements Party.Server {
       roundNumber: currentRoundNumber,
       penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
-      targetPlayers: this.config?.targetPlayers,
       gameEndReason: this.phase === RoomPhase.GAME_OVER ? this.lastGameEndReason : undefined,
       bonusAwarded: this.phase === RoomPhase.GAME_OVER ? this.lastBonusAwarded : undefined,
       rejoinWindowEndsAt: this.rejoinWindowEndsAt || undefined,
