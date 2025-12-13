@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
-import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic } from '../../utils/sound';
+import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound } from '../../utils/sound';
 import Card from '../Card';
 import { Trophy, XCircle, Zap, User, Wifi, Smartphone } from 'lucide-react';
 
@@ -19,6 +19,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [rejoinTimeLeft, setRejoinTimeLeft] = useState(0);
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
+  const [showVictoryCelebration, setShowVictoryCelebration] = useState(false);
+  const [victoryCelebrationShown, setVictoryCelebrationShown] = useState(false);
 
   // Window Resize Listener
   useEffect(() => {
@@ -98,8 +100,25 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   useEffect(() => {
     if (roomState?.phase !== RoomPhase.GAME_OVER) {
       setHasClickedPlayAgain(false);
+      setVictoryCelebrationShown(false);
+      setShowVictoryCelebration(false);
     }
   }, [roomState?.phase]);
+
+  // Victory celebration when game ends
+  useEffect(() => {
+    if (roomState?.phase === RoomPhase.GAME_OVER && !victoryCelebrationShown) {
+      setVictoryCelebrationShown(true);
+      setShowVictoryCelebration(true);
+      stopBackgroundMusic();
+      playVictorySound();
+
+      // Hide celebration after 3 seconds to show scoreboard
+      setTimeout(() => {
+        setShowVictoryCelebration(false);
+      }, 3000);
+    }
+  }, [roomState?.phase, victoryCelebrationShown]);
 
   const handleSymbolClick = (symbol: SymbolItem) => {
     if (roomState?.phase !== RoomPhase.PLAYING) return;
@@ -143,6 +162,51 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white">
         <div className="text-9xl font-black animate-pulse">{roomState.countdown}</div>
         <div className="text-2xl mt-4">Get Ready!</div>
+      </div>
+    );
+  }
+
+  // Victory celebration screen with floating confetti
+  if (roomState.phase === RoomPhase.GAME_OVER && showVictoryCelebration) {
+    const sortedPlayers = [...roomState.players].sort((a, b) => a.cardsRemaining - b.cardsRemaining);
+    const winner = sortedPlayers[0];
+    const isYouWinner = winner?.isYou;
+    const confettiEmojis = ['🎉', '🎊', '🎈', '⭐', '✨', '🌟', '🏆'];
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 overflow-hidden">
+        {/* Winner text */}
+        <div className="text-center z-10">
+          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-lg mb-4 animate-bounce">
+            {isYouWinner ? 'YOU WIN!' : `${winner?.name} WINS!`}
+          </div>
+        </div>
+
+        {/* Floating confetti emojis */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute text-4xl md:text-5xl"
+              style={{
+                left: `${(i * 5) % 100}%`,
+                bottom: '-10%',
+                animation: `floatUp ${2 + (i % 3)}s ease-out forwards`,
+                animationDelay: `${(i * 0.1) % 1}s`,
+              }}
+            >
+              {confettiEmojis[i % confettiEmojis.length]}
+            </div>
+          ))}
+        </div>
+
+        {/* CSS for float animation */}
+        <style>{`
+          @keyframes floatUp {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-120vh) rotate(360deg); opacity: 0; }
+          }
+        `}</style>
       </div>
     );
   }
@@ -270,9 +334,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
           {isYouWinner ? (
             // YOU WON - Big celebration
             <div className="text-center animate-bounce">
-              <div className="text-8xl mb-4">🎉</div>
               <div className="text-6xl font-black text-white drop-shadow-lg">YOU GOT IT!</div>
-              <div className="text-2xl text-green-100 mt-4 font-bold">-1 Card</div>
             </div>
           ) : (
             // OPPONENT WON - Smaller notification

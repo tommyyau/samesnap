@@ -46,6 +46,12 @@ const SUITES = {
     args: ['test-game-logic.mjs'],
     expectedDuration: '~5s'
   },
+  singleplayer: {
+    name: 'Single Player Updates',
+    command: 'node',
+    args: ['test-single-player-updates.mjs'],
+    expectedDuration: '~5s'
+  },
   multiplayer: {
     name: 'Multiplayer',
     command: 'node',
@@ -94,12 +100,12 @@ const SUITES = {
 const GROUPS = {
   // Stage-based plans. Each nested array runs in parallel; stages run sequentially.
   all: [
-    ['logic', 'hook'],
+    ['logic', 'hook', 'singleplayer'],
     ['multiplayer', 'stress'],
     ['gameflow', 'arbitration', 'lifecycle', 'scores']
   ],
   quick: [
-    ['logic', 'hook'],
+    ['logic', 'hook', 'singleplayer'],
     ['multiplayer']
   ]
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty } from '../../shared/types';
+import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty, GameDuration } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
-import { stopBackgroundMusic, playMatchSound, playErrorSound } from '../../utils/sound';
+import { stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, User, Zap, Smartphone } from 'lucide-react';
@@ -72,7 +72,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     clearAllBotTimers();
     // Use hard symbols for HARD card difficulty
     const symbols = config.cardDifficulty === CardDifficulty.HARD ? SYMBOLS_HARD : undefined;
-    const deck = generateDeck(7, symbols);
+    const generatedDeck = generateDeck(7, symbols);
+
+    // Truncate deck based on game duration setting
+    const gameDuration = config.gameDuration ?? GameDuration.LONG;
+    const deckSize = Math.min(gameDuration, generatedDeck.length);
+    const deck = generatedDeck.slice(0, deckSize);
 
     // Note: Audio is started in Lobby.tsx during user gesture (required for iOS)
 
@@ -240,11 +245,19 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   };
 
   const endGame = (winnerId?: string) => {
-    setGameState(GameState.GAME_OVER);
     clearAllBotTimers();
+    setLastWinnerId(winnerId || null);
+    stopBackgroundMusic();
+    playVictorySound();
+
+    // Show victory celebration for 3 seconds before scoreboard
+    setGameState(GameState.VICTORY_CELEBRATION);
     const winner = winnerId ? players.find(p => p.id === winnerId) : null;
     setMessage(winner ? `${winner.name} wins!` : 'Game Over!');
-    stopBackgroundMusic();
+
+    setTimeout(() => {
+      setGameState(GameState.GAME_OVER);
+    }, 3000);
   };
 
   const handlePlayerClick = (symbol: SymbolItem) => {
@@ -297,6 +310,51 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     onExit();
   };
 
+  // Victory celebration screen with floating confetti
+  if (gameState === GameState.VICTORY_CELEBRATION) {
+    const sortedPlayers = [...players].sort((a, b) => a.cardStack.length - b.cardStack.length);
+    const winner = sortedPlayers[0];
+    const isHumanWinner = winner?.id === 'player';
+    const confettiEmojis = ['🎉', '🎊', '🎈', '⭐', '✨', '🌟', '🏆'];
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 overflow-hidden">
+        {/* Winner text */}
+        <div className="text-center z-10">
+          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-lg mb-4 animate-bounce">
+            {isHumanWinner ? 'YOU WIN!' : `${winner?.name} WINS!`}
+          </div>
+        </div>
+
+        {/* Floating confetti emojis */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute text-4xl md:text-5xl"
+              style={{
+                left: `${(i * 5) % 100}%`,
+                bottom: '-10%',
+                animation: `floatUp ${2 + (i % 3)}s ease-out forwards`,
+                animationDelay: `${(i * 0.1) % 1}s`,
+              }}
+            >
+              {confettiEmojis[i % confettiEmojis.length]}
+            </div>
+          ))}
+        </div>
+
+        {/* CSS for float animation */}
+        <style>{`
+          @keyframes floatUp {
+            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(-120vh) rotate(360deg); opacity: 0; }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   if (gameState === GameState.GAME_OVER) {
     // Sort by cards remaining ascending (0 = winner)
     const sortedPlayers = [...players].sort((a, b) => a.cardStack.length - b.cardStack.length);
@@ -345,8 +403,22 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     );
   }
 
+  // Get winner name for celebration overlay
+  const lastWinnerPlayer = lastWinnerId ? players.find(p => p.id === lastWinnerId) : null;
+
   return (
     <>
+      {/* Round Win Celebration Overlay */}
+      {gameState === GameState.ROUND_ANIMATION && lastWinnerId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gradient-to-br from-green-500/90 to-emerald-600/90 animate-fadeIn">
+          <div className="text-center animate-bounce">
+            <div className="text-5xl md:text-6xl font-black text-white drop-shadow-lg">
+              {lastWinnerId === 'player' ? 'YOU GOT IT!' : `${lastWinnerPlayer?.name} got it!`}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Portrait Orientation Warning */}
       {isMobilePortrait && (
         <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">

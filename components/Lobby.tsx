@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Difficulty, GameConfig, CardDifficulty } from '../types';
+import { Difficulty, GameConfig, CardDifficulty, GameDuration } from '../types';
 
 interface LobbyProps {
   onStart: (config: GameConfig) => void;
@@ -10,14 +10,16 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onStart({ 
-      playerName: name.trim() || 'Player 1', 
-      botCount, 
+    onStart({
+      playerName: name.trim() || 'Player 1',
+      botCount,
       difficulty,
-      cardDifficulty 
+      cardDifficulty,
+      gameDuration
     });
   };
 
@@ -105,6 +107,45 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
                 }`}
               >
                 Medium (Chaotic)
+              </button>
+            </div>
+          </div>
+
+          <div className="text-left">
+            <label className="block text-sm font-bold text-gray-700 mb-1">Game Duration</label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setGameDuration(GameDuration.SHORT)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.SHORT
+                    ? 'bg-green-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Short (10)
+              </button>
+              <button
+                type="button"
+                onClick={() => setGameDuration(GameDuration.MEDIUM)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.MEDIUM
+                    ? 'bg-yellow-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Medium (25)
+              </button>
+              <button
+                type="button"
+                onClick={() => setGameDuration(GameDuration.LONG)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.LONG
+                    ? 'bg-red-500 text-white shadow-md'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Long (50)
               </button>
             </div>
           </div>

@@ -12,6 +12,7 @@
     "deploy:party": "partykit deploy",
     "test": "node scripts/run-tests.mjs quick",
     "test:logic": "node test-game-logic.mjs",
+    "test:singleplayer": "node test-single-player-updates.mjs",
     "test:multiplayer": "node test-multiplayer.mjs",
     "test:hook": "node test-hook-state.mjs",
     "test:ui": "node test-react-integration.mjs",

@@ -189,3 +189,87 @@ export const playErrorSound = () => {
     // Silently ignore audio errors in headless/unsupported contexts
   }
 };
+
+// Victory celebration sound - fanfare with sparkles
+export const playVictorySound = () => {
+  try {
+    const ctx = initAudio();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    if (!isValidTime(now)) return;
+
+    // Fanfare notes - triumphant ascending arpeggio
+    const fanfareNotes = [
+      { freq: 523.25, time: 0 },      // C5
+      { freq: 659.25, time: 0.15 },   // E5
+      { freq: 783.99, time: 0.3 },    // G5
+      { freq: 1046.50, time: 0.45 },  // C6
+      { freq: 1318.51, time: 0.6 },   // E6
+      { freq: 1567.98, time: 0.75 },  // G6
+    ];
+
+    // Play fanfare notes
+    fanfareNotes.forEach(({ freq, time }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + time);
+
+      gain.gain.setValueAtTime(0, now + time);
+      gain.gain.linearRampToValueAtTime(0.2, now + time + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + time + 0.4);
+
+      osc.start(now + time);
+      osc.stop(now + time + 0.5);
+    });
+
+    // Sparkle/shimmer effect - random high-pitched tones
+    for (let i = 0; i < 12; i++) {
+      const sparkleTime = Math.random() * 1.5;
+      const sparkleFreq = 2000 + Math.random() * 2000; // 2000-4000 Hz
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(sparkleFreq, now + sparkleTime);
+
+      gain.gain.setValueAtTime(0, now + sparkleTime);
+      gain.gain.linearRampToValueAtTime(0.08, now + sparkleTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + sparkleTime + 0.15);
+
+      osc.start(now + sparkleTime);
+      osc.stop(now + sparkleTime + 0.2);
+    }
+
+    // Final chord - sustained triumph
+    const chordFreqs = [523.25, 659.25, 783.99, 1046.50]; // C major chord
+    chordFreqs.forEach(freq => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + 1);
+
+      gain.gain.setValueAtTime(0, now + 1);
+      gain.gain.linearRampToValueAtTime(0.15, now + 1.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 2.5);
+
+      osc.start(now + 1);
+      osc.stop(now + 2.6);
+    });
+  } catch {
+    // Silently ignore audio errors in headless/unsupported contexts
+  }
+};

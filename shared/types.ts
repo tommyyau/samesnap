@@ -107,6 +107,7 @@ export enum GameState {
   LOBBY = 'LOBBY',
   PLAYING = 'PLAYING',
   ROUND_ANIMATION = 'ROUND_ANIMATION',
+  VICTORY_CELEBRATION = 'VICTORY_CELEBRATION',
   GAME_OVER = 'GAME_OVER',
 }
 
@@ -122,4 +123,5 @@ export interface GameConfig {
   botCount: number;
   difficulty: Difficulty;
   cardDifficulty: CardDifficulty;
+  gameDuration: GameDuration;
 }
