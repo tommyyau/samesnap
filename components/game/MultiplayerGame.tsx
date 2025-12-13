@@ -13,10 +13,12 @@ interface MultiplayerGameProps {
 }
 
 const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHook }) => {
-  const { roomState, latency, attemptMatch, leaveRoom } = multiplayerHook;
+  const { roomState, latency, attemptMatch, leaveRoom, playAgain } = multiplayerHook;
 
   const [penaltyTimeLeft, setPenaltyTimeLeft] = useState(0);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [rejoinTimeLeft, setRejoinTimeLeft] = useState(0);
+  const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
 
   // Window Resize Listener
   useEffect(() => {
@@ -77,6 +79,28 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }
   }, [roomState?.penaltyUntil]);
 
+  // Rejoin window countdown
+  useEffect(() => {
+    if (roomState?.rejoinWindowEndsAt && roomState.rejoinWindowEndsAt > Date.now()) {
+      const interval = setInterval(() => {
+        const left = Math.max(0, Math.ceil((roomState.rejoinWindowEndsAt! - Date.now()) / 1000));
+        setRejoinTimeLeft(left);
+        if (left <= 0) clearInterval(interval);
+      }, 100);
+      setRejoinTimeLeft(Math.ceil((roomState.rejoinWindowEndsAt - Date.now()) / 1000));
+      return () => clearInterval(interval);
+    } else {
+      setRejoinTimeLeft(0);
+    }
+  }, [roomState?.rejoinWindowEndsAt]);
+
+  // Reset hasClickedPlayAgain when we leave GAME_OVER phase (room was reset)
+  useEffect(() => {
+    if (roomState?.phase !== RoomPhase.GAME_OVER) {
+      setHasClickedPlayAgain(false);
+    }
+  }, [roomState?.phase]);
+
   const handleSymbolClick = (symbol: SymbolItem) => {
     if (roomState?.phase !== RoomPhase.PLAYING) return;
     if (roomState.penaltyUntil && Date.now() < roomState.penaltyUntil) return;
@@ -87,6 +111,11 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     stopBackgroundMusic();
     leaveRoom();
     onExit();
+  };
+
+  const handlePlayAgain = () => {
+    setHasClickedPlayAgain(true);
+    playAgain();
   };
 
   if (!roomState) {
@@ -123,30 +152,81 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     const sortedPlayers = [...roomState.players].sort((a, b) => b.score - a.score);
     const winner = sortedPlayers[0];
     const isYouWinner = winner?.isYou;
+    const isLastPlayerStanding = roomState.gameEndReason === 'last_player_standing';
+    const playersWantingRematch = roomState.playersWantRematch || [];
+    const you = roomState.players.find(p => p.isYou);
+    const youWantRematch = you && playersWantingRematch.includes(you.id);
+    const canPlayAgain = rejoinTimeLeft > 0 && !hasClickedPlayAgain && !youWantRematch;
 
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white p-4">
         <div className="bg-white text-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center">
           <Trophy className={`w-24 h-24 mx-auto mb-4 ${isYouWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
-          <h2 className="text-4xl font-bold mb-2">{isYouWinner ? 'You Won!' : `${winner?.name} Wins!`}</h2>
-          <p className="text-gray-500 mb-6">Final Scores</p>
 
-          <div className="space-y-3 mb-8">
-            {sortedPlayers.map((p, idx) => (
-              <div key={p.id} className={`flex justify-between items-center p-3 rounded-xl font-bold ${p.isYou ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 w-6">#{idx + 1}</span>
-                  <span>{p.name}</span>
-                  {p.isYou && <span className="text-xs text-indigo-500">(You)</span>}
+          {isLastPlayerStanding && isYouWinner ? (
+            <>
+              <h2 className="text-4xl font-bold mb-2">Last One Standing!</h2>
+              <p className="text-gray-500 mb-2">Everyone else left - You win!</p>
+              {roomState.bonusAwarded !== undefined && roomState.bonusAwarded > 0 && (
+                <p className="text-green-600 font-bold mb-6">+{roomState.bonusAwarded} bonus cards awarded</p>
+              )}
+            </>
+          ) : (
+            <>
+              <h2 className="text-4xl font-bold mb-2">{isYouWinner ? 'You Won!' : `${winner?.name} Wins!`}</h2>
+              <p className="text-gray-500 mb-6">Final Scores</p>
+            </>
+          )}
+
+          <div className="space-y-3 mb-6">
+            {sortedPlayers.map((p, idx) => {
+              const wantsRematch = playersWantingRematch.includes(p.id);
+              return (
+                <div key={p.id} className={`flex justify-between items-center p-3 rounded-xl font-bold ${p.isYou ? 'bg-indigo-100' : 'bg-gray-100'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400 w-6">#{idx + 1}</span>
+                    <span>{p.name}</span>
+                    {p.isYou && <span className="text-xs text-indigo-500">(You)</span>}
+                    {wantsRematch && <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Ready</span>}
+                  </div>
+                  <span className="text-indigo-600">{p.score} cards</span>
                 </div>
-                <span className="text-indigo-600">{p.score} cards</span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          <button onClick={handleExit} className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition">
-            Back to Lobby
-          </button>
+          {/* Rejoin window status */}
+          {rejoinTimeLeft > 0 && (
+            <div className="mb-4 text-sm text-gray-500">
+              {playersWantingRematch.length > 0 ? (
+                <span>{playersWantingRematch.length} player(s) ready for rematch</span>
+              ) : (
+                <span>Rematch window: {rejoinTimeLeft}s</span>
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3 justify-center">
+            {canPlayAgain && (
+              <button
+                onClick={handlePlayAgain}
+                className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold transition"
+              >
+                Play Again
+              </button>
+            )}
+            {(hasClickedPlayAgain || youWantRematch) && rejoinTimeLeft > 0 && (
+              <button
+                disabled
+                className="px-6 py-3 rounded-xl bg-gray-400 text-white font-bold cursor-not-allowed"
+              >
+                Waiting for others... ({rejoinTimeLeft}s)
+              </button>
+            )}
+            <button onClick={handleExit} className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition">
+              Back to Lobby
+            </button>
+          </div>
         </div>
       </div>
     );

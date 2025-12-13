@@ -11,8 +11,9 @@ import { CardDifficulty } from "../shared/types";
 const PENALTY_DURATION = 3000;
 const DEFAULT_TARGET_PLAYERS = 8; // High default to prevent accidental auto-start
 const ARBITRATION_WINDOW_MS = 100;
-const RECONNECT_GRACE_PERIOD = 60000;
+const RECONNECT_GRACE_PERIOD = 5000;  // 5 seconds - quick reconnect for network glitches
 const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
+const REJOIN_WINDOW_MS = 10000;  // 10 seconds to rejoin after game over
 
 export default class SameSnapRoom implements Party.Server {
   private phase: RoomPhase = RoomPhase.WAITING;
@@ -46,6 +47,13 @@ export default class SameSnapRoom implements Party.Server {
   // Round-end timer tracking (for next round transition)
   private roundEndTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
+  // Rejoin window tracking (after game over)
+  private rejoinWindowTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private rejoinWindowEndsAt: number | null = null;
+  private playersWantRematch: Set<string> = new Set();
+  private lastGameEndReason: 'deck_exhausted' | 'last_player_standing' = 'deck_exhausted';
+  private lastBonusAwarded: number | undefined = undefined;
+
   constructor(readonly room: Party.Room) {}
 
   onConnect(conn: Party.Connection, ctx: Party.ConnectionContext) {
@@ -77,9 +85,9 @@ export default class SameSnapRoom implements Party.Server {
 
     // During countdown, check if we still have enough connected players
     if (this.phase === RoomPhase.COUNTDOWN) {
-      const connectedCount = Array.from(this.players.values())
-        .filter(p => p.status === PlayerStatus.CONNECTED).length;
-      const requiredPlayers = this.config?.targetPlayers ?? 2;
+      const connectedCount = this.getConnectedPlayerCount();
+      // Enforce minimum of 2 players for multiplayer
+      const requiredPlayers = Math.max(2, this.config?.targetPlayers ?? 2);
       if (connectedCount < requiredPlayers) {
         this.cancelCountdown();
       }
@@ -132,6 +140,9 @@ export default class SameSnapRoom implements Party.Server {
           }
           break;
         }
+        case 'play_again':
+          this.handlePlayAgain(sender);
+          break;
       }
     } catch (e) {
       console.error('Invalid message:', e);
@@ -139,6 +150,15 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private handleJoin(conn: Party.Connection, playerName: string) {
+    // Check if this connection is already associated with a player (e.g., from a prior reconnect)
+    // This prevents duplicate players when reconnect succeeds but client also sent a fallback join
+    const existingPlayerId = this.connectionToPlayerId.get(conn.id);
+    if (existingPlayerId && this.players.has(existingPlayerId)) {
+      // Already in the room - just send room state to sync them up
+      this.sendRoomState(existingPlayerId);
+      return;
+    }
+
     // Check if room is full (max 8)
     if (this.players.size >= 8) {
       conn.send(JSON.stringify({
@@ -150,11 +170,22 @@ export default class SameSnapRoom implements Party.Server {
 
     // Check if game in progress
     if (this.phase !== RoomPhase.WAITING) {
-      conn.send(JSON.stringify({
-        type: 'error',
-        payload: { code: ERROR_CODES.GAME_IN_PROGRESS, message: 'Game already in progress' }
-      }));
-      return;
+      // Allow joining during GAME_OVER if rejoin window has expired or no players are left
+      // This lets the room code be reused after a game finishes
+      const rejoinWindowExpired = this.phase === RoomPhase.GAME_OVER &&
+        (!this.rejoinWindowEndsAt || Date.now() > this.rejoinWindowEndsAt);
+      const noPlayersLeft = this.players.size === 0;
+
+      if (rejoinWindowExpired || noPlayersLeft) {
+        // Reset room state to allow fresh game
+        this.resetRoomForNewGame();
+      } else {
+        conn.send(JSON.stringify({
+          type: 'error',
+          payload: { code: ERROR_CODES.GAME_IN_PROGRESS, message: 'Game already in progress' }
+        }));
+        return;
+      }
     }
 
     // Check for duplicate names
@@ -191,6 +222,10 @@ export default class SameSnapRoom implements Party.Server {
 
       // Start room timeout when first player joins
       this.startRoomTimeout();
+    } else {
+      // Refresh room timeout when additional players join
+      // This extends the deadline so late joiners don't cause expiration
+      this.refreshRoomTimeout();
     }
 
     // Broadcast to others (per-connection so isYou stays accurate)
@@ -216,6 +251,17 @@ export default class SameSnapRoom implements Party.Server {
     }, ROOM_TIMEOUT);
   }
 
+  // Refresh room timeout on player activity (joins, reconnects)
+  // Only refreshes if still in WAITING phase
+  private refreshRoomTimeout() {
+    if (this.phase !== RoomPhase.WAITING) return;
+
+    this.startRoomTimeout();
+
+    // Broadcast updated roomExpiresAt to all players
+    this.broadcastRoomState();
+  }
+
   private handleRoomExpired() {
     if (this.phase !== RoomPhase.WAITING) return; // Don't expire if game started
 
@@ -235,8 +281,11 @@ export default class SameSnapRoom implements Party.Server {
     if (this.phase !== RoomPhase.WAITING) return;
     if (!this.config) return;
 
-    const targetPlayers = this.config.targetPlayers;
-    if (this.players.size >= targetPlayers && targetPlayers >= 1) {
+    // Enforce minimum of 2 players - multiplayer games can't start with just 1
+    // Use connected count, not total players (disconnected players in grace period shouldn't count)
+    const requiredPlayers = Math.max(2, this.config.targetPlayers);
+    const connectedCount = this.getConnectedPlayerCount();
+    if (connectedCount >= requiredPlayers) {
       // Cancel room timeout since we're starting
       if (this.roomTimeoutId) {
         clearTimeout(this.roomTimeoutId);
@@ -268,12 +317,17 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    this.config = config;
+    // Clamp targetPlayers to minimum of 2 - multiplayer requires at least 2 players
+    const clampedConfig: MultiplayerGameConfig = {
+      ...config,
+      targetPlayers: Math.max(2, config.targetPlayers),
+    };
+    this.config = clampedConfig;
 
-    // Broadcast config update to all players
+    // Broadcast clamped config to all players so UI stays in sync
     this.broadcastToAll({
       type: 'config_updated',
-      payload: { config }
+      payload: { config: clampedConfig }
     });
 
     // Check if we should auto-start now
@@ -291,7 +345,9 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    if (this.players.size < 2) {
+    // Use connected count, not total players (disconnected players in grace period shouldn't count)
+    const connectedCount = this.getConnectedPlayerCount();
+    if (connectedCount < 2) {
       this.sendToPlayer(player.id, {
         type: 'error',
         payload: { code: ERROR_CODES.INVALID_STATE, message: 'Need at least 2 players' }
@@ -299,7 +355,11 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    this.config = config;
+    // Clamp targetPlayers to minimum of 2 for consistency
+    this.config = {
+      ...config,
+      targetPlayers: Math.max(2, config.targetPlayers),
+    };
     this.startCountdown();
   }
 
@@ -327,9 +387,11 @@ export default class SameSnapRoom implements Party.Server {
         this.countdownTimeoutId = setTimeout(tick, 1000);
       } else {
         this.countdownTimeoutId = null;
-        // Guard: only start if we still have enough players (use targetPlayers, fallback to 2)
-        const requiredPlayers = this.config?.targetPlayers ?? 2;
-        if (this.players.size >= requiredPlayers) {
+        // Guard: only start if we still have enough connected players (enforce minimum of 2)
+        // Use connected count, not total players (disconnected players in grace period shouldn't count)
+        const requiredPlayers = Math.max(2, this.config?.targetPlayers ?? 2);
+        const connectedCount = this.getConnectedPlayerCount();
+        if (connectedCount >= requiredPlayers) {
           this.startGame();
         } else {
           // Not enough players, return to waiting
@@ -464,12 +526,10 @@ export default class SameSnapRoom implements Party.Server {
 
     if (attempts.length === 0) return;
 
-    // Sort: server timestamp, then client timestamp, then random
+    // Sort: server timestamp, then random (no client timestamp tie-breaker to avoid skew)
     attempts.sort((a, b) => {
       const serverDiff = a.serverTimestamp - b.serverTimestamp;
       if (serverDiff !== 0) return serverDiff;
-      const clientDiff = a.clientTimestamp - b.clientTimestamp;
-      if (clientDiff !== 0) return clientDiff;
       return Math.random() - 0.5;
     });
 
@@ -540,19 +600,264 @@ export default class SameSnapRoom implements Party.Server {
     });
   }
 
-  private endGame() {
+  private endGame(reason: 'deck_exhausted' | 'last_player_standing' = 'deck_exhausted', bonusAwarded?: number) {
     // Clear any pending round-end timer to prevent nextRound from firing
     if (this.roundEndTimeoutId) {
       clearTimeout(this.roundEndTimeoutId);
       this.roundEndTimeoutId = null;
     }
 
+    // Clear any pending arbitration
+    if (this.pendingArbitration?.timeoutId) {
+      clearTimeout(this.pendingArbitration.timeoutId);
+      this.pendingArbitration = null;
+    }
+
+    // Clear all penalties
+    this.penalties.clear();
+
     this.phase = RoomPhase.GAME_OVER;
+    this.lastGameEndReason = reason;
+    this.lastBonusAwarded = bonusAwarded;
+    this.playersWantRematch.clear();
+
     const finalScores = Array.from(this.players.values())
       .map(p => ({ playerId: p.id, name: p.name, score: p.score }))
       .sort((a, b) => b.score - a.score);
 
-    this.broadcastToAll({ type: 'game_over', payload: { finalScores } });
+    // Start 10-second rejoin window
+    this.rejoinWindowEndsAt = Date.now() + REJOIN_WINDOW_MS;
+    this.rejoinWindowTimeoutId = setTimeout(() => {
+      this.handleRejoinWindowExpired();
+    }, REJOIN_WINDOW_MS);
+
+    this.broadcastToAll({
+      type: 'game_over',
+      payload: { finalScores, reason, bonusAwarded, rejoinWindowMs: REJOIN_WINDOW_MS }
+    });
+  }
+
+  private endGameLastPlayerStanding() {
+    console.log(`[Room ${this.room.id}] Last player standing triggered, phase=${this.phase}`);
+
+    // Find the sole remaining player
+    const survivor = Array.from(this.players.values())[0];
+    if (!survivor) {
+      console.log(`[Room ${this.room.id}] No survivor found, ending game with no bonus`);
+      this.endGame('last_player_standing');
+      return;
+    }
+
+    // Award all remaining deck cards to the survivor
+    const remainingCards = this.deck.length;
+    survivor.score += remainingCards;
+
+    console.log(`[Room ${this.room.id}] Survivor: ${survivor.name} (${survivor.id}), awarding ${remainingCards} bonus cards, total score: ${survivor.score}`);
+
+    this.endGame('last_player_standing', remainingCards);
+  }
+
+  private handlePlayAgain(conn: Party.Connection) {
+    const playerId = this.connectionToPlayerId.get(conn.id);
+    if (!playerId) return;
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    // Only accept play_again during GAME_OVER phase
+    if (this.phase !== RoomPhase.GAME_OVER) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        payload: { code: ERROR_CODES.INVALID_STATE, message: 'Cannot play again - game not in GAME_OVER phase' }
+      });
+      return;
+    }
+
+    // Check if rejoin window is still active
+    if (!this.rejoinWindowEndsAt || Date.now() > this.rejoinWindowEndsAt) {
+      this.sendToPlayer(playerId, {
+        type: 'error',
+        payload: { code: ERROR_CODES.INVALID_STATE, message: 'Rejoin window has expired' }
+      });
+      return;
+    }
+
+    // Add player to rematch set
+    this.playersWantRematch.add(playerId);
+    console.log(`[Room ${this.room.id}] Player ${player.name} wants rematch. Count: ${this.playersWantRematch.size}`);
+
+    // Acknowledge to all players that this player wants rematch
+    this.broadcastToAll({
+      type: 'play_again_ack',
+      payload: { playerId }
+    });
+
+    // If we have 2+ players wanting rematch, immediately proceed to reset
+    // (Don't wait for the full 10s window)
+    if (this.playersWantRematch.size >= 2) {
+      console.log(`[Room ${this.room.id}] 2+ players want rematch, resetting room early`);
+      this.handleRejoinWindowExpired();
+    }
+  }
+
+  private handleRejoinWindowExpired() {
+    // Clear the rejoin window timer if it's still running
+    if (this.rejoinWindowTimeoutId) {
+      clearTimeout(this.rejoinWindowTimeoutId);
+      this.rejoinWindowTimeoutId = null;
+    }
+    this.rejoinWindowEndsAt = null;
+
+    // Count connected players who want rematch
+    const rematchPlayers = Array.from(this.playersWantRematch).filter(pid => {
+      const player = this.players.get(pid);
+      return player && player.status === PlayerStatus.CONNECTED;
+    });
+
+    console.log(`[Room ${this.room.id}] Rejoin window expired. Rematch players: ${rematchPlayers.length}`);
+
+    // If no one wants rematch, close the room
+    if (rematchPlayers.length === 0) {
+      console.log(`[Room ${this.room.id}] No players want rematch, closing room`);
+      this.broadcastToAll({
+        type: 'room_expired',
+        payload: { reason: 'No players rejoined after game over' }
+      });
+      // Close all connections
+      for (const conn of this.room.getConnections()) {
+        conn.close();
+      }
+      return;
+    }
+
+    // If only 1 player wants rematch, boot them with a message
+    if (rematchPlayers.length === 1) {
+      const soloPlayerId = rematchPlayers[0];
+      console.log(`[Room ${this.room.id}] Only 1 player (${soloPlayerId}) rejoined, booting them`);
+
+      this.sendToPlayer(soloPlayerId, {
+        type: 'solo_rejoin_boot',
+        payload: { message: "You're the only one who rejoined. Please create a new room or wait for friends." }
+      });
+
+      // Boot the solo player
+      const player = this.players.get(soloPlayerId);
+      if (player) {
+        const conn = this.room.getConnection(player.connectionId);
+        if (conn) {
+          setTimeout(() => conn.close(), 100); // Small delay to ensure message is sent
+        }
+      }
+      return;
+    }
+
+    // 2+ players want rematch - reset the room
+    console.log(`[Room ${this.room.id}] ${rematchPlayers.length} players want rematch, resetting room`);
+    this.resetRoom(rematchPlayers);
+  }
+
+  // Reset room to fresh state for a completely new game (when someone joins an expired room)
+  private resetRoomForNewGame() {
+    // Clear rejoin timer if running
+    if (this.rejoinWindowTimeoutId) {
+      clearTimeout(this.rejoinWindowTimeoutId);
+      this.rejoinWindowTimeoutId = null;
+    }
+
+    // Close all existing connections and clear players
+    for (const [playerId, player] of this.players) {
+      const conn = this.room.getConnection(player.connectionId);
+      if (conn) conn.close();
+    }
+    this.players.clear();
+    this.connectionToPlayerId.clear();
+    this.disconnectedPlayers.clear();
+
+    // Reset all game state
+    this.phase = RoomPhase.WAITING;
+    this.hostId = null;
+    this.deck = [];
+    this.fullDeck = [];
+    this.centerCard = null;
+    this.config = null;
+    this.roundNumber = 0;
+    this.roundsCompleted = 0;
+    this.roundWinnerId = null;
+    this.roundMatchedSymbolId = null;
+    this.penalties.clear();
+    this.pendingArbitration = null;
+    this.playersWantRematch.clear();
+    this.rejoinWindowEndsAt = null;
+    this.lastGameEndReason = 'deck_exhausted';
+    this.lastBonusAwarded = undefined;
+
+    // Clear room timeout - will be set when first player joins
+    if (this.roomTimeoutId) {
+      clearTimeout(this.roomTimeoutId);
+      this.roomTimeoutId = null;
+    }
+    this.roomExpiresAt = null;
+
+    console.log(`[Room ${this.room.id}] Room completely reset for new game`);
+  }
+
+  private resetRoom(keepPlayerIds: string[]) {
+    // Remove players who didn't opt for rematch
+    const playersToRemove: string[] = [];
+    for (const [playerId] of this.players) {
+      if (!keepPlayerIds.includes(playerId)) {
+        playersToRemove.push(playerId);
+      }
+    }
+    for (const pid of playersToRemove) {
+      const player = this.players.get(pid);
+      if (player) {
+        const conn = this.room.getConnection(player.connectionId);
+        if (conn) conn.close();
+        this.players.delete(pid);
+        this.connectionToPlayerId.delete(player.connectionId);
+      }
+    }
+
+    // Reset game state
+    this.phase = RoomPhase.WAITING;
+    this.deck = [];
+    this.fullDeck = [];
+    this.centerCard = null;
+    this.roundNumber = 0;
+    this.roundsCompleted = 0;
+    this.roundWinnerId = null;
+    this.roundMatchedSymbolId = null;
+    this.penalties.clear();
+    this.pendingArbitration = null;
+    this.disconnectedPlayers.clear();
+    this.playersWantRematch.clear();
+    this.rejoinWindowEndsAt = null;
+
+    // Reset player state (scores, hands)
+    for (const [playerId, player] of this.players) {
+      player.score = 0;
+      player.handCardId = null;
+    }
+
+    // Ensure we have a host
+    if (!this.hostId || !this.players.has(this.hostId)) {
+      const firstPlayer = Array.from(this.players.values())[0];
+      if (firstPlayer) {
+        this.players.forEach(p => { p.isHost = false; });
+        firstPlayer.isHost = true;
+        this.hostId = firstPlayer.id;
+        this.sendToPlayer(firstPlayer.id, { type: 'you_are_host', payload: {} });
+      }
+    }
+
+    // Re-arm room timeout
+    this.startRoomTimeout();
+
+    // Broadcast room_reset and fresh room_state to all remaining players
+    this.broadcastToAll({ type: 'room_reset', payload: {} });
+    this.broadcastRoomState();
+
+    console.log(`[Room ${this.room.id}] Room reset complete. ${this.players.size} players in waiting room`);
   }
 
   private handleKickPlayer(hostConnectionId: string, targetPlayerId: string) {
@@ -590,11 +895,17 @@ export default class SameSnapRoom implements Party.Server {
       this.hostId = null;
     }
 
+    // Remove from playersWantRematch if they were in it
+    this.playersWantRematch.delete(playerId);
+
     // Check if countdown should be cancelled or game should end
     if (this.players.size < 2) {
       if (this.phase === RoomPhase.COUNTDOWN) {
         this.cancelCountdown();
-      } else if (this.phase !== RoomPhase.WAITING) {
+      } else if (this.phase === RoomPhase.PLAYING || this.phase === RoomPhase.ROUND_END) {
+        // Last player standing - award remaining deck cards and end game
+        this.endGameLastPlayerStanding();
+      } else if (this.phase !== RoomPhase.WAITING && this.phase !== RoomPhase.GAME_OVER) {
         this.endGame();
       }
     }
@@ -616,6 +927,12 @@ export default class SameSnapRoom implements Party.Server {
     if (player.isHost) this.hostId = playerId;
 
     this.broadcastToAll({ type: 'player_reconnected', payload: { playerId } });
+
+    // Refresh room timeout when player reconnects during WAITING phase
+    // This extends the deadline for active players
+    // NOTE: Must be called BEFORE sendRoomState so client gets updated roomExpiresAt
+    this.refreshRoomTimeout();
+
     this.sendRoomState(playerId);
   }
 
@@ -707,6 +1024,10 @@ export default class SameSnapRoom implements Party.Server {
       penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
       targetPlayers: this.config?.targetPlayers,
+      gameEndReason: this.phase === RoomPhase.GAME_OVER ? this.lastGameEndReason : undefined,
+      bonusAwarded: this.phase === RoomPhase.GAME_OVER ? this.lastBonusAwarded : undefined,
+      rejoinWindowEndsAt: this.rejoinWindowEndsAt || undefined,
+      playersWantRematch: this.playersWantRematch.size > 0 ? Array.from(this.playersWantRematch) : undefined,
     };
 
     this.sendToPlayer(playerId, { type: 'room_state', payload: state });
@@ -719,6 +1040,11 @@ export default class SameSnapRoom implements Party.Server {
         this.sendRoomState(playerId);
       }
     }
+  }
+
+  private getConnectedPlayerCount(): number {
+    return Array.from(this.players.values())
+      .filter(p => p.status === PlayerStatus.CONNECTED).length;
   }
 
   private getPlayerIdByConnection(connectionId: string): string | null {

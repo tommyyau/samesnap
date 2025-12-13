@@ -1158,6 +1158,49 @@ async function runRoomLifecycleTests() {
 
     cleanup(host, guest);
   });
+
+  // Note: This test takes ~70 seconds to run
+  await test('Room does not expire with staggered joins exceeding initial 60s timeout', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    let roomExpired = false;
+
+    // Track room_expired messages via _messageListeners
+    host._messageListeners.push((msg) => {
+      if (msg.type === 'room_expired') roomExpired = true;
+    });
+
+    // Stagger joins: each join resets the 60s timer
+    // Join P2 at 25s mark
+    console.log('     Waiting 25s...');
+    await sleep(25000);
+    if (roomExpired) throw new Error('Room should not expire at 25s');
+    const p2 = await createPlayer(roomCode, 'P2');
+
+    // Join P3 at 50s mark (25s + 25s = 50s total from host creation)
+    console.log('     Waiting 25s more...');
+    await sleep(25000);
+    if (roomExpired) throw new Error('Room should not expire at 50s');
+    const p3 = await createPlayer(roomCode, 'P3');
+
+    // Wait until 70s total - would have expired at 60s without refresh
+    console.log('     Waiting final 20s...');
+    await sleep(20000);
+    if (roomExpired) throw new Error('Room should NOT expire at 70s with refreshed timeouts');
+
+    // Verify all connections still open
+    if (host.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('Host should still be connected');
+    }
+    if (p2.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('P2 should still be connected');
+    }
+    if (p3.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('P3 should still be connected');
+    }
+
+    cleanup(host, p2, p3);
+  });
 }
 
 // ============================================

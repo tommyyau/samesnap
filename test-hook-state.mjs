@@ -160,6 +160,8 @@ class HookSimulator {
           this.roomState = {
             ...this.roomState,
             phase: 'GAME_OVER',
+            gameEndReason: message.payload.reason,
+            bonusAwarded: message.payload.bonusAwarded,
             players: message.payload.finalScores.map(s => {
               const existing = this.roomState.players.find(p => p.id === s.playerId);
               return existing ? { ...existing, score: s.score } : {
@@ -716,6 +718,109 @@ async function testGameOverMessage() {
     const p2 = hook.roomState.players.find(p => p.id === 'p2');
     if (p1.score !== 25) throw new Error('P1 score should be 25');
     if (p2.score !== 20) throw new Error('P2 score should be 20');
+  });
+
+  await test('game_over sets gameEndReason for deck_exhausted', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'PLAYING',
+        players: [{ id: 'p1', name: 'P1', score: 5 }],
+        config: {}
+      }
+    });
+    hook.handleMessage({
+      type: 'game_over',
+      payload: {
+        finalScores: [{ playerId: 'p1', name: 'P1', score: 10 }],
+        reason: 'deck_exhausted'
+      }
+    });
+
+    if (hook.roomState.gameEndReason !== 'deck_exhausted') {
+      throw new Error(`gameEndReason should be deck_exhausted, got ${hook.roomState.gameEndReason}`);
+    }
+  });
+
+  await test('game_over sets gameEndReason for last_player_standing', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'PLAYING',
+        players: [{ id: 'p1', name: 'P1', score: 2, isYou: true }],
+        config: {}
+      }
+    });
+    hook.handleMessage({
+      type: 'game_over',
+      payload: {
+        finalScores: [{ playerId: 'p1', name: 'P1', score: 52 }],
+        reason: 'last_player_standing',
+        bonusAwarded: 50
+      }
+    });
+
+    if (hook.roomState.gameEndReason !== 'last_player_standing') {
+      throw new Error(`gameEndReason should be last_player_standing, got ${hook.roomState.gameEndReason}`);
+    }
+    if (hook.roomState.bonusAwarded !== 50) {
+      throw new Error(`bonusAwarded should be 50, got ${hook.roomState.bonusAwarded}`);
+    }
+  });
+
+  await test('game_over with last_player_standing includes bonus in final score', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'PLAYING',
+        players: [{ id: 'survivor', name: 'Survivor', score: 3, isYou: true }],
+        config: {}
+      }
+    });
+
+    // Survivor started with 3 points, gets 45 bonus cards = 48 total
+    hook.handleMessage({
+      type: 'game_over',
+      payload: {
+        finalScores: [{ playerId: 'survivor', name: 'Survivor', score: 48 }],
+        reason: 'last_player_standing',
+        bonusAwarded: 45
+      }
+    });
+
+    const survivor = hook.roomState.players.find(p => p.id === 'survivor');
+    if (survivor.score !== 48) {
+      throw new Error(`Survivor score should be 48 (3 + 45 bonus), got ${survivor.score}`);
+    }
+    if (hook.roomState.bonusAwarded !== 45) {
+      throw new Error(`bonusAwarded should be 45, got ${hook.roomState.bonusAwarded}`);
+    }
+  });
+
+  await test('game_over without reason keeps gameEndReason undefined', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'PLAYING',
+        players: [{ id: 'p1', name: 'P1', score: 5 }],
+        config: {}
+      }
+    });
+    hook.handleMessage({
+      type: 'game_over',
+      payload: {
+        finalScores: [{ playerId: 'p1', name: 'P1', score: 10 }]
+        // No reason field (backwards compatibility)
+      }
+    });
+
+    if (hook.roomState.gameEndReason !== undefined) {
+      throw new Error(`gameEndReason should be undefined, got ${hook.roomState.gameEndReason}`);
+    }
   });
 }
 

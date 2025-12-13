@@ -15,9 +15,10 @@ interface UseMultiplayerGameOptions {
   onError?: (error: { code: string; message: string }) => void;
   onKicked?: () => void;
   onRoomExpired?: (reason: string) => void;
+  onSoloRejoinBoot?: (message: string) => void;
 }
 
-export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, onRoomExpired }: UseMultiplayerGameOptions) {
+export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, onRoomExpired, onSoloRejoinBoot }: UseMultiplayerGameOptions) {
   const [roomState, setRoomState] = useState<ClientRoomState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isHost, setIsHost] = useState(false);
@@ -28,6 +29,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   // Store countdown value if it arrives before room_state
   const pendingCountdown = useRef<number | null>(null);
   const storageKey = useMemo(() => `samesnap-player-${roomCode}`, [roomCode]);
+  // Track reconnection state to avoid race conditions
+  const reconnectPending = useRef(false);
+  const fallbackJoinSent = useRef(false);
+  const originalReconnectId = useRef<string | null>(null);
 
   // Read the initial playerId from localStorage for reconnection
   const initialPlayerId = useMemo(() => {
@@ -69,12 +74,16 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     onOpen: () => {
       setIsConnected(true);
       const sendJoin = () => {
+        // Don't send join if we already have a confirmed session
         if (hasJoined.current) return;
-        hasJoined.current = true;
+        // Mark that we've sent a fallback join (but don't set hasJoined until room_state confirms)
+        fallbackJoinSent.current = true;
         socket.send(JSON.stringify({ type: 'join', payload: { playerName } } as ClientMessage));
       };
       const sendReconnect = () => {
-        // Send reconnect message with stored player ID
+        // Track that we're waiting for a reconnect response
+        reconnectPending.current = true;
+        originalReconnectId.current = playerIdRef.current;
         socket.send(JSON.stringify({ type: 'reconnect', payload: { playerId: playerIdRef.current! } } as ClientMessage));
       };
 
@@ -88,9 +97,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         // (e.g., if the session expired server-side)
         if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
         joinTimeoutRef.current = window.setTimeout(() => {
-          if (!hasJoined.current) {
-            // Reconnect didn't work - clear the stale ID and join fresh
-            clearStoredPlayerId();
+          // Only send fallback if we haven't received confirmation yet
+          if (!hasJoined.current && !fallbackJoinSent.current) {
+            // Don't clear playerIdRef yet - wait for server response to either
+            // reconnect or join before updating stored ID
             sendJoin();
           }
         }, 2000);
@@ -106,7 +116,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         clearTimeout(joinTimeoutRef.current);
         joinTimeoutRef.current = null;
       }
+      // Reset join/reconnect tracking for next connection attempt
       hasJoined.current = false;
+      reconnectPending.current = false;
+      fallbackJoinSent.current = false;
+      // Keep originalReconnectId - we might need it for the next reconnect attempt
     },
     onMessage: (event) => {
       const message: ServerMessage = JSON.parse(event.data);
@@ -128,8 +142,24 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           clearTimeout(joinTimeoutRef.current);
           joinTimeoutRef.current = null;
         }
+
+        // Find our player in the response
+        const me = message.payload.players.find(p => p.isYou);
+
+        // Handle race condition: if we already joined with a new ID, ignore late reconnect responses
+        if (hasJoined.current && me && me.id !== playerIdRef.current) {
+          // This is a late response for a different session - ignore it
+          // This can happen if reconnect succeeded after fallback join already completed
+          console.log('Ignoring late room_state for different player ID');
+          return;
+        }
+
+        // Now we're confirmed in the room
         hasJoined.current = true;
+        reconnectPending.current = false;
+        fallbackJoinSent.current = false;
         setHasReceivedRoomState(true);
+
         // Convert server's penaltyRemainingMs to client-local penaltyUntil (clock-skew safe)
         const clientPenaltyUntil = message.payload.penaltyRemainingMs
           ? Date.now() + message.payload.penaltyRemainingMs
@@ -150,10 +180,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           setRoomState(stateWithClientPenalty);
         }
         // Update host status and persist player ID for future reconnects
-        const me = message.payload.players.find(p => p.isYou);
         if (me) {
-          // Persist ID to localStorage for future reconnects (does NOT change roomPath mid-session)
+          // Persist ID to localStorage for future reconnects
+          // Only update if this is a new ID (from join) or confirming reconnect
           if (me.id && me.id !== playerIdRef.current) {
+            // New ID from join - clear old ID and persist new one
             persistPlayerId(me.id);
           }
           setIsHost(me.isHost);
@@ -299,6 +330,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         setRoomState(prev => prev ? {
           ...prev,
           phase: RoomPhase.GAME_OVER,
+          gameEndReason: message.payload.reason,
+          bonusAwarded: message.payload.bonusAwarded,
+          rejoinWindowEndsAt: message.payload.rejoinWindowMs ? Date.now() + message.payload.rejoinWindowMs : undefined,
+          playersWantRematch: [],
           players: message.payload.finalScores.map(s => {
             const existingPlayer = prev.players.find(p => p.id === s.playerId);
             return existingPlayer ? { ...existingPlayer, score: s.score } : {
@@ -312,6 +347,23 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
             };
           })
         } : null);
+        break;
+
+      case 'play_again_ack':
+        setRoomState(prev => prev ? {
+          ...prev,
+          playersWantRematch: [...(prev.playersWantRematch || []), message.payload.playerId]
+        } : null);
+        break;
+
+      case 'solo_rejoin_boot':
+        clearStoredPlayerId();
+        onSoloRejoinBoot?.(message.payload.message);
+        break;
+
+      case 'room_reset':
+        // Room has been reset - stay connected but wait for room_state
+        // The server will send a fresh room_state right after this
         break;
 
       case 'pong':
@@ -332,10 +384,23 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'error':
+        // Handle reconnect failure specifically
+        if (reconnectPending.current && message.payload.code === 'GAME_IN_PROGRESS') {
+          // Reconnect failed - clear the stale ID
+          clearStoredPlayerId();
+          reconnectPending.current = false;
+          // If we haven't sent a fallback join yet, do so now
+          if (!fallbackJoinSent.current && !hasJoined.current) {
+            fallbackJoinSent.current = true;
+            sendMessage({ type: 'join', payload: { playerName } });
+          }
+          // Don't surface this error to the user - we're handling it internally
+          return;
+        }
         onError?.(message.payload);
         break;
     }
-  }, [onError, onKicked, onRoomExpired, clearStoredPlayerId, persistPlayerId]);
+  }, [onError, onKicked, onRoomExpired, onSoloRejoinBoot, clearStoredPlayerId, persistPlayerId, sendMessage, playerName]);
 
   const attemptMatch = useCallback((symbolId: number) => {
     sendMessage({
@@ -362,6 +427,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     sendMessage({ type: 'kick_player', payload: { playerId } });
   }, [sendMessage]);
 
+  const playAgain = useCallback(() => {
+    sendMessage({ type: 'play_again', payload: {} });
+  }, [sendMessage]);
+
   useEffect(() => {
     return () => {
       if (pingInterval.current) clearInterval(pingInterval.current);
@@ -383,6 +452,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     startGame,
     leaveRoom,
     kickPlayer,
+    playAgain,
   };
 }
 

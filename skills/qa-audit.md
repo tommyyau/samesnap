@@ -235,20 +235,92 @@ npm run test:all          # All suites
 
 ---
 
+## Confidence Calculation Model
+
+> **IMPORTANT:** Use this multi-dimensional model for all confidence assessments.
+> Single-number "99.5% confidence" claims are not acceptable.
+
+### Dimensions (5 factors)
+
+| Dimension | Weight | How to Calculate |
+|-----------|--------|------------------|
+| **Requirements Coverage (RC)** | 30% | (tested requirements / total requirements) × 100 |
+| **Bug Discovery Rate (BDR)** | 25% | 100% if decreasing, 80% if stable, 50% if found HIGH after stable |
+| **Severity Trend (ST)** | 15% | 100% if no HIGH/MEDIUM open, 80% if MEDIUM only, 50% if HIGH open |
+| **Test Stability (TS)** | 15% | (passing tests / total tests) × 100, minus 10% per flaky test |
+| **Known Gaps Factor (KG)** | 15% | 100% - (5% × number of known untested scenarios, max 50% penalty) |
+
+### Formula
+
+```
+Confidence = (RC × 0.30) + (BDR × 0.25) + (ST × 0.15) + (TS × 0.15) + (KG × 0.15)
+```
+
+### Requirements Checklist (for RC calculation)
+
+- [ ] Join flow (new player joins room)
+- [ ] Duplicate name handling
+- [ ] Room full rejection (8 max)
+- [ ] Host assignment (first player)
+- [ ] Host reassignment (host leaves)
+- [ ] Config changes (host only)
+- [ ] Manual start (host only, 2+ players)
+- [ ] Auto-start (target reached)
+- [ ] Countdown flow (5-4-3-2-1-0)
+- [ ] Countdown cancellation (player leaves)
+- [ ] Match validation (correct symbol)
+- [ ] Penalty system (wrong match)
+- [ ] Round transitions (winner gets center card)
+- [ ] Game over (deck exhausted)
+- [ ] Reconnection via URL param
+- [ ] Reconnection via message
+- [ ] Reconnection race conditions
+- [ ] Ghost player prevention
+- [ ] Room timeout (60s expiry)
+- [ ] Room timeout refresh (on join/reconnect)
+- [ ] Kick player (host only)
+- [ ] isYou flag correctness
+
+### Known Gaps Checklist (for KG calculation)
+
+Count these if NOT tested:
+1. Clock skew between client/server
+2. Concurrent matches in arbitration window
+3. Network partitions (connected but can't receive)
+4. Browser back button mid-game
+5. Multiple tabs same player
+6. Rapid reconnect cycles
+7. Memory leaks in long games
+8. Message ordering (out-of-order delivery)
+9. Payload validation (malformed JSON)
+10. Rate limiting / spam protection
+
+### Interpretation
+
+| Score | Meaning | Action |
+|-------|---------|--------|
+| < 60% | Not ready | Fix HIGH bugs, add critical tests |
+| 60-75% | Internal only | Beta testing with team |
+| 75-85% | Beta-ready | Can release to limited users |
+| 85-95% | Production-ready | Launch with monitoring |
+| 95%+ | Battle-tested | Full confidence |
+
+---
+
 ## Recommendations Summary
 
 ### Immediate (before next release)
-1. Add phase guard to `nextRound()` function
+1. ~~Add phase guard to `nextRound()` function~~ ✅ DONE
 2. Remove or implement `match_result` message type
-3. Fix penalty timestamp to use duration instead of absolute time
+3. ~~Fix penalty timestamp to use duration instead of absolute time~~ ✅ DONE
 
 ### Short-term
 4. Consolidate duplicate EMOJIS/SYMBOLS definitions
 5. Use PlayerStatus enum instead of string literals in hook
-6. Add missing test cases for edge conditions
+6. Add missing test cases for edge conditions (kick_player, game_over)
 
 ### Long-term
-7. Consider resetting room timeout when players join
+7. ~~Consider resetting room timeout when players join~~ ✅ DONE
 8. Run Playwright UI tests in CI
 9. Add clock skew handling for all timestamps
 
@@ -258,5 +330,6 @@ npm run test:all          # All suites
 
 - **Date:** 2025-12-13
 - **Commit:** 5aa2e62cab2782786997651516f3abe4758b5a6b
-- **Confidence:** 75%
-- **Next Steps:** Address HIGH severity findings, add regression tests
+- **Initial Confidence:** 75% (single-number, deprecated)
+- **Current Model:** Multi-dimensional (see above)
+- **Next Steps:** Run /qa to recalculate using new model

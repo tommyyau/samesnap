@@ -90,6 +90,10 @@ export interface ClientRoomState {
   penaltyRemainingMs?: number; // Server-sent: remaining penalty duration in ms (clock-skew safe)
   roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
   targetPlayers?: number;     // How many players needed to start
+  gameEndReason?: 'deck_exhausted' | 'last_player_standing';  // Why the game ended
+  bonusAwarded?: number;      // Bonus points awarded (e.g., remaining deck cards for last player standing)
+  rejoinWindowEndsAt?: number; // Timestamp when rejoin window ends (10s after game_over)
+  playersWantRematch?: string[]; // IDs of players who clicked "Play Again"
 }
 
 // Single-player types (keep existing)
