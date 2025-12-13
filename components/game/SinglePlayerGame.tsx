@@ -458,10 +458,11 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    {bot.cardStack.length > 0 && (
                      <Card
                        card={bot.cardStack[0]}
-                       size={botCardSize}
+                       size={lastWinnerId === bot.id && isAnimating ? botCardSize * 1.5 : botCardSize}
                        layoutMode={config.cardDifficulty}
+                       highlightSymbolId={lastWinnerId === bot.id && isAnimating ? matchedSymbolId : null}
                        disabled
-                       className="bg-gray-50"
+                       className={lastWinnerId === bot.id && isAnimating ? "bg-green-50 ring-4 ring-green-400" : "bg-gray-50"}
                        interactive={false}
                      />
                    )}
@@ -492,7 +493,10 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    onClickSymbol={handlePlayerClick}
                    disabled={isPenaltyActive || isAnimating}
                    highlightError={isPenaltyActive}
-                   className="border-indigo-500 bg-indigo-50 shadow-indigo-200 hover:scale-[1.02] transition-transform"
+                   highlightSymbolId={lastWinnerId === 'player' && isAnimating ? matchedSymbolId : null}
+                   className={`border-indigo-500 shadow-indigo-200 hover:scale-[1.02] transition-transform ${
+                     lastWinnerId === 'player' && isAnimating ? 'bg-green-50 ring-4 ring-green-400' : 'bg-indigo-50'
+                   }`}
                    interactive={true}
                  />
                )}
