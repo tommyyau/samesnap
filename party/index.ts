@@ -1,12 +1,12 @@
 import type * as Party from "partykit/server";
 import {
   RoomPhase, PlayerStatus, ServerPlayer, ClientPlayer,
-  ClientRoomState, CardData, MultiplayerGameConfig, MatchAttempt
+  ClientRoomState, CardData, MultiplayerGameConfig, MatchAttempt,
+  CardDifficulty, GameDuration
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
 import { generateDeck, SYMBOLS } from "../shared/gameLogic";
 import { SYMBOLS_HARD } from "../constants";
-import { CardDifficulty } from "../shared/types";
 
 const PENALTY_DURATION = 3000;
 const ARBITRATION_WINDOW_MS = 100;
@@ -213,6 +213,7 @@ export default class SameSnapRoom implements Party.Server {
       // Initialize default config
       this.config = {
         cardDifficulty: CardDifficulty.EASY,
+        gameDuration: GameDuration.LONG,
       };
 
       this.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
@@ -295,13 +296,16 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    // Config only contains cardDifficulty now
-    this.config = config;
+    // Merge with defaults to ensure backward compatibility
+    this.config = {
+      cardDifficulty: config.cardDifficulty,
+      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.LONG,
+    };
 
     // Broadcast config to all players so UI stays in sync
     this.broadcastToAll({
       type: 'config_updated',
-      payload: { config }
+      payload: { config: this.config }
     });
   }
 
@@ -326,8 +330,11 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    // Config only contains cardDifficulty now
-    this.config = config;
+    // Merge with defaults to ensure backward compatibility
+    this.config = {
+      cardDifficulty: config.cardDifficulty,
+      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.LONG,
+    };
     this.startCountdown();
   }
 
@@ -394,7 +401,12 @@ export default class SameSnapRoom implements Party.Server {
     const symbols = this.config?.cardDifficulty === CardDifficulty.HARD
       ? SYMBOLS_HARD
       : SYMBOLS;
-    this.fullDeck = generateDeck(7, symbols);
+    const generatedDeck = generateDeck(7, symbols);
+
+    // Truncate deck based on game duration setting
+    const gameDuration = this.config?.gameDuration ?? GameDuration.LONG;
+    const deckSize = Math.min(gameDuration, generatedDeck.length);
+    this.fullDeck = generatedDeck.slice(0, deckSize);
     this.deck = [...this.fullDeck];
     this.roundNumber = 0;
     this.penalties.clear();

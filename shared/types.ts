@@ -20,6 +20,12 @@ export enum CardDifficulty {
   HARD = 'HARD',
 }
 
+export enum GameDuration {
+  SHORT = 10,   // 10 cards - quick game
+  MEDIUM = 25,  // 25 cards - medium game
+  LONG = 50,    // 50 cards - full game
+}
+
 // ============================================
 // MULTIPLAYER TYPES
 // ============================================
@@ -70,6 +76,7 @@ export interface MatchAttempt {
 
 export interface MultiplayerGameConfig {
   cardDifficulty: CardDifficulty;
+  gameDuration: GameDuration;
 }
 
 export interface ClientRoomState {

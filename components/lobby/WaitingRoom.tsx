@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap } from 'lucide-react';
-import { CardDifficulty, RoomPhase } from '../../shared/types';
+import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 
 interface WaitingRoomProps {
@@ -14,6 +14,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [copied, setCopied] = useState(false);
   // Local state for host controls - always synced from server config when it changes
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.LONG);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -36,14 +37,23 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   useEffect(() => {
     if (roomState?.config) {
       setCardDifficulty(roomState.config.cardDifficulty);
+      setGameDuration(roomState.config.gameDuration);
     }
-  }, [roomState?.config?.cardDifficulty]);
+  }, [roomState?.config?.cardDifficulty, roomState?.config?.gameDuration]);
 
   // Handler for when host explicitly changes card difficulty
   const handleCardDifficultyChange = (newDifficulty: CardDifficulty) => {
     setCardDifficulty(newDifficulty);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty: newDifficulty });
+      setConfig({ cardDifficulty: newDifficulty, gameDuration });
+    }
+  };
+
+  // Handler for when host explicitly changes game duration
+  const handleGameDurationChange = (newDuration: GameDuration) => {
+    setGameDuration(newDuration);
+    if (isHost && roomState?.phase === RoomPhase.WAITING) {
+      setConfig({ cardDifficulty: cardDifficulty ?? CardDifficulty.EASY, gameDuration: newDuration });
     }
   };
 
@@ -75,6 +85,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const handleStartGame = () => {
     startGame({
       cardDifficulty: cardDifficulty ?? CardDifficulty.EASY,
+      gameDuration,
     });
   };
 
@@ -196,7 +207,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
         {/* Game Settings (Host Only) - Card Layout */}
         {isHost && (
-          <div className="mb-6">
+          <div className="mb-4">
             <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
             <div className="grid grid-cols-3 gap-2">
               <button
@@ -233,13 +244,62 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           </div>
         )}
 
+        {/* Game Settings (Host Only) - Game Duration */}
+        {isHost && (
+          <div className="mb-6">
+            <p className="text-sm font-bold text-gray-700 mb-2">Game Duration</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleGameDurationChange(GameDuration.SHORT)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.SHORT
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Short
+              </button>
+              <button
+                onClick={() => handleGameDurationChange(GameDuration.MEDIUM)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.MEDIUM
+                    ? 'bg-yellow-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Medium
+              </button>
+              <button
+                onClick={() => handleGameDurationChange(GameDuration.LONG)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  gameDuration === GameDuration.LONG
+                    ? 'bg-purple-500 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Long
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1 text-center">
+              {gameDuration === GameDuration.SHORT ? '10 cards' :
+               gameDuration === GameDuration.MEDIUM ? '25 cards' : '50 cards'}
+            </p>
+          </div>
+        )}
+
         {/* Non-host sees config summary */}
         {!isHost && roomState?.config && (
-          <div className="mb-6 p-3 bg-gray-50 rounded-xl">
+          <div className="mb-6 p-3 bg-gray-50 rounded-xl space-y-1">
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Card Layout:</span> {
                 roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' :
                 roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' : 'Hard'
+              }
+            </p>
+            <p className="text-sm text-gray-500">
+              <span className="font-semibold">Game Duration:</span> {
+                roomState.config.gameDuration === GameDuration.SHORT ? 'Short (10 cards)' :
+                roomState.config.gameDuration === GameDuration.MEDIUM ? 'Medium (25 cards)' : 'Long (50 cards)'
               }
             </p>
           </div>
@@ -247,20 +307,19 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
         {/* Actions */}
         <div className="space-y-3">
-          {isHost ? (
+          {isHost && canStart ? (
             <button
               onClick={handleStartGame}
-              disabled={!canStart}
-              className="w-full py-4 bg-yellow-400 hover:bg-yellow-300 disabled:bg-gray-300 text-yellow-900 disabled:text-gray-500 rounded-2xl text-xl font-black flex items-center justify-center gap-2 transition-all"
+              className="w-full py-4 bg-yellow-400 hover:bg-yellow-300 text-yellow-900 rounded-2xl text-xl font-black flex items-center justify-center gap-2 transition-all"
             >
               <Play size={24} />
-              {canStart ? 'Start Now' : 'Need 2+ Players'}
+              Start Now
             </button>
-          ) : (
+          ) : !isHost ? (
             <div className="text-center py-4 bg-gray-100 rounded-2xl text-gray-500 font-semibold">
               Waiting for players to join...
             </div>
-          )}
+          ) : null}
 
           <button
             onClick={handleLeave}

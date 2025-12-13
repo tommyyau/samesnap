@@ -534,7 +534,8 @@ async function runGameFlowTests() {
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
     console.log('DEBUG first deck', firstRound.payload.deckRemaining);
-    const expectedRemaining = 57 - 2 - 1;
+    // Default game duration is LONG (50 cards): 50 - 2 player cards - 1 center = 47
+    const expectedRemaining = 50 - 2 - 1;
     if (firstRound.payload.deckRemaining !== expectedRemaining) {
       throw new Error(`Expected ${expectedRemaining} cards remaining, got ${firstRound.payload.deckRemaining}`);
     }
@@ -2228,6 +2229,97 @@ async function runGameOverExitTests() {
 }
 
 // ============================================
+// TEST SUITE: Game Duration
+// ============================================
+async function runGameDurationTests() {
+  console.log('\n⏱️ GAME DURATION TESTS\n');
+
+  await test('SHORT game duration uses 10 cards', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game with SHORT duration (10 cards)
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    const roundStart = await waitForMessage(host, 'round_start', 10000);
+    // 10 cards total - 2 player cards - 1 center card = 7 remaining
+    const expectedRemaining = 10 - 2 - 1;
+    if (roundStart.payload.deckRemaining !== expectedRemaining) {
+      throw new Error(`Expected ${expectedRemaining} cards remaining for SHORT game, got ${roundStart.payload.deckRemaining}`);
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('MEDIUM game duration uses 25 cards', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game with MEDIUM duration (25 cards)
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 25 } }
+    }));
+
+    const roundStart = await waitForMessage(host, 'round_start', 10000);
+    // 25 cards total - 2 player cards - 1 center card = 22 remaining
+    const expectedRemaining = 25 - 2 - 1;
+    if (roundStart.payload.deckRemaining !== expectedRemaining) {
+      throw new Error(`Expected ${expectedRemaining} cards remaining for MEDIUM game, got ${roundStart.payload.deckRemaining}`);
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('LONG game duration uses 50 cards', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game with LONG duration (50 cards)
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 50 } }
+    }));
+
+    const roundStart = await waitForMessage(host, 'round_start', 10000);
+    // 50 cards total - 2 player cards - 1 center card = 47 remaining
+    const expectedRemaining = 50 - 2 - 1;
+    if (roundStart.payload.deckRemaining !== expectedRemaining) {
+      throw new Error(`Expected ${expectedRemaining} cards remaining for LONG game, got ${roundStart.payload.deckRemaining}`);
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('Default game duration is LONG (50 cards) when not specified', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game without specifying gameDuration
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY' } }
+    }));
+
+    const roundStart = await waitForMessage(host, 'round_start', 10000);
+    // Default is 50 cards: 50 - 2 player cards - 1 center = 47 remaining
+    const expectedRemaining = 50 - 2 - 1;
+    if (roundStart.payload.deckRemaining !== expectedRemaining) {
+      throw new Error(`Expected ${expectedRemaining} cards remaining for default LONG game, got ${roundStart.payload.deckRemaining}`);
+    }
+
+    cleanup(host, guest);
+  });
+}
+
+// ============================================
 // MAIN TEST RUNNER
 // ============================================
 async function runAllTests() {
@@ -2257,6 +2349,7 @@ async function runAllTests() {
   await runLastPlayerStandingTests();
   await runRejoinTests();
   await runGameOverExitTests();
+  await runGameDurationTests();
 
   // Summary
   console.log('\n' + '='.repeat(60));

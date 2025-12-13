@@ -5,6 +5,7 @@ export {
   GameState,
   Difficulty,
   CardDifficulty,
+  GameDuration,
   type Player,
   type GameConfig,
   // Multiplayer types

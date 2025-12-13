@@ -37,8 +37,7 @@ function MultiplayerWrapper({
     playerName,
     onError: useCallback((err: { code: string; message: string }) => console.error(err), []),
     onKicked: onLeave,
-    onRoomExpired: useCallback((reason: string) => {
-      alert(reason);
+    onRoomExpired: useCallback((_reason: string) => {
       onLeave();
     }, [onLeave]),
   });
