@@ -4,7 +4,7 @@ import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
 import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
 import Card from '../Card';
-import { Trophy, XCircle, User, Zap, Smartphone } from 'lucide-react';
+import { Trophy, XCircle, Zap, Smartphone } from 'lucide-react';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -487,9 +487,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
             {/* Player Hand (LEFT) */}
             <div className="relative">
-               <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-indigo-600 font-bold tracking-widest text-xs uppercase flex items-center gap-1 whitespace-nowrap">
-                  <User size={12}/> {humanPlayer?.name || 'You'}
-               </div>
                {humanPlayer && humanPlayer.cardStack.length > 0 && (
                  <Card
                    card={humanPlayer.cardStack[0]}
@@ -503,6 +500,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                      lastWinnerId === 'player' && isAnimating ? 'bg-yellow-50 ring-4 ring-yellow-400' : 'bg-indigo-50'
                    }`}
                    interactive={true}
+                   label={humanPlayer.name}
                  />
                )}
                {/* Penalty Overlay */}
@@ -518,7 +516,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
             {/* The Deck / Snap Card (RIGHT) */}
             <div className="relative group">
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-xs uppercase">Snap Card</div>
                {centerCard ? (
                  <Card
                    card={centerCard}
@@ -528,6 +525,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    disabled={isPenaltyActive || isAnimating}
                    className="z-10 relative"
                    interactive={false}
+                   label="Snap Card"
                  />
                ) : (
                  <div style={{ width: cardSize, height: cardSize }} className="rounded-full bg-gray-200 border-4 border-dashed border-gray-300 flex items-center justify-center text-gray-400 font-bold">

@@ -11,18 +11,20 @@ interface CardProps {
   layoutMode?: CardDifficulty;
   className?: string;
   interactive?: boolean;
+  label?: string; // Curved text on card circumference
 }
 
-const Card: React.FC<CardProps> = ({ 
-  card, 
-  size, 
-  onClickSymbol, 
-  disabled = false, 
+const Card: React.FC<CardProps> = ({
+  card,
+  size,
+  onClickSymbol,
+  disabled = false,
   highlightError = false,
   highlightSymbolId = null,
   layoutMode = CardDifficulty.EASY,
   className = '',
-  interactive = true
+  interactive = true,
+  label
 }) => {
   // Precompute layout
   const symbolLayout = useMemo(() => {
@@ -154,47 +156,106 @@ const Card: React.FC<CardProps> = ({
   }, [card.id, card.symbols, layoutMode]);
 
   return (
-    <div 
-      className={`
-        relative rounded-full bg-white shadow-xl border-4 transition-all duration-300 overflow-hidden
-        ${highlightError ? 'border-red-500 animate-pulse bg-red-50' : 'border-indigo-200'}
-        ${disabled ? 'cursor-not-allowed' : ''}
-        ${interactive && !disabled ? 'hover:border-indigo-400' : ''}
-        ${className}
-      `}
-      style={{ width: size, height: size }}
-    >
-      {symbolLayout.map((item, i) => {
-        const isMatch = highlightSymbolId === item.symbol.id;
-        const isDimmed = highlightSymbolId !== null && !isMatch;
+    <div className="relative flex items-center justify-center select-none" style={{ width: size, height: size }}>
 
-        return (
-          <div
-            key={`${card.id}-${item.symbol.id}-${i}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (!disabled && onClickSymbol) onClickSymbol(item.symbol);
-            }}
-            className={`
-              absolute flex items-center justify-center select-none
-              transition-all duration-500
-              ${interactive && !disabled ? 'cursor-pointer hover:scale-125 active:scale-95' : ''}
-              ${isMatch ? 'z-50 scale-150 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]' : ''}
-              ${isDimmed ? 'opacity-20 blur-[1px]' : 'opacity-100'}
-            `}
-            style={{
-              left: `${item.x}%`,
-              top: `${item.y}%`,
-              width: `${25 * item.scale}%`,
-              height: `${25 * item.scale}%`,
-              transform: `translate(-50%, -50%) rotate(${item.rotation}deg) scale(${isMatch ? 1.5 : 1})`,
-              fontSize: `${size * 0.15 * item.scale}px`,
-            }}
-          >
-            {item.symbol.char}
-          </div>
-        );
-      })}
+      {/* The Actual Card Circle */}
+      <div
+        className={`
+          relative w-full h-full rounded-full bg-white shadow-xl border-4 transition-all duration-300 overflow-hidden z-10
+          ${highlightError ? 'border-red-500 animate-pulse bg-red-50' : 'border-indigo-200'}
+          ${disabled ? 'cursor-not-allowed' : ''}
+          ${interactive && !disabled ? 'hover:border-indigo-400' : ''}
+          ${className}
+        `}
+      >
+        {symbolLayout.map((item, i) => {
+          const isMatch = highlightSymbolId === item.symbol.id;
+          const isDimmed = highlightSymbolId !== null && !isMatch;
+
+          return (
+            <div
+              key={`${card.id}-${item.symbol.id}-${i}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!disabled && onClickSymbol) onClickSymbol(item.symbol);
+              }}
+              className={`
+                absolute flex items-center justify-center select-none
+                transition-all duration-500
+                ${interactive && !disabled ? 'cursor-pointer hover:scale-125 active:scale-95' : ''}
+                ${isMatch ? 'z-50 scale-150 drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]' : ''}
+                ${isDimmed ? 'opacity-20 blur-[1px]' : 'opacity-100'}
+              `}
+              style={{
+                left: `${item.x}%`,
+                top: `${item.y}%`,
+                width: `${25 * item.scale}%`,
+                height: `${25 * item.scale}%`,
+                transform: `translate(-50%, -50%) rotate(${item.rotation}deg) scale(${isMatch ? 1.5 : 1})`,
+                fontSize: `${size * 0.15 * item.scale}px`,
+              }}
+            >
+              {item.symbol.char}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Curved Label on card circumference */}
+      {label && (
+        <div className="absolute z-20 pointer-events-none" style={{
+          width: size * 1.2,
+          height: size * 1.2,
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)'
+        }}>
+          <svg viewBox="0 0 120 120" className="w-full h-full overflow-visible">
+            <defs>
+              <path id={`label-curve-${card.id}`} d="M 10,60 A 50,50 0 0 1 110,60" />
+            </defs>
+            {/* White stroke behind text for contrast */}
+            <text
+              style={{
+                fontSize: size * 0.038,
+                fill: 'none',
+                stroke: 'white',
+                strokeWidth: 4,
+                fontFamily: 'Fredoka, sans-serif',
+                fontWeight: 800,
+                textAnchor: 'middle',
+                dominantBaseline: 'middle',
+                letterSpacing: '0.15em',
+                pointerEvents: 'none',
+                userSelect: 'none'
+              }}
+            >
+              <textPath href={`#label-curve-${card.id}`} startOffset="50%">
+                {label}
+              </textPath>
+            </text>
+            {/* Main text */}
+            <text
+              style={{
+                fontSize: size * 0.038,
+                fill: '#1e1b4b',
+                fontFamily: 'Fredoka, sans-serif',
+                fontWeight: 800,
+                textAnchor: 'middle',
+                dominantBaseline: 'middle',
+                letterSpacing: '0.15em',
+                pointerEvents: 'none',
+                userSelect: 'none'
+              }}
+            >
+              <textPath href={`#label-curve-${card.id}`} startOffset="50%">
+                {label}
+              </textPath>
+            </text>
+          </svg>
+        </div>
+      )}
+
     </div>
   );
 };
