@@ -454,6 +454,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                     : 'opacity-70 scale-90'
                 }`}
               >
+                 {/* GOT IT! badge above winner */}
+                 {lastWinnerId === bot.id && isAnimating && (
+                   <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-yellow-400 text-yellow-900 text-xs font-black px-2 py-0.5 rounded-full shadow-md z-10">
+                     GOT IT!
+                   </div>
+                 )}
                  <div className="relative">
                    {bot.cardStack.length > 0 && (
                      <Card
@@ -462,7 +468,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                        layoutMode={config.cardDifficulty}
                        highlightSymbolId={lastWinnerId === bot.id && isAnimating ? matchedSymbolId : null}
                        disabled
-                       className={lastWinnerId === bot.id && isAnimating ? "bg-green-50 ring-4 ring-green-400" : "bg-gray-50"}
+                       className={lastWinnerId === bot.id && isAnimating ? "bg-yellow-50 ring-4 ring-yellow-400" : "bg-gray-50"}
                        interactive={false}
                      />
                    )}
@@ -472,7 +478,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                  </div>
                  <span className="text-xs font-bold mt-1 text-gray-500">{bot.name}</span>
                  <span className="text-xs text-gray-400">{bot.cardStack.length} left</span>
-                 {lastWinnerId === bot.id && <div className="text-xs text-green-600 font-bold animate-bounce">Got it!</div>}
               </div>
             ))}
           </div>
@@ -495,7 +500,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    highlightError={isPenaltyActive}
                    highlightSymbolId={lastWinnerId === 'player' && isAnimating ? matchedSymbolId : null}
                    className={`border-indigo-500 shadow-indigo-200 hover:scale-[1.02] transition-transform ${
-                     lastWinnerId === 'player' && isAnimating ? 'bg-green-50 ring-4 ring-green-400' : 'bg-indigo-50'
+                     lastWinnerId === 'player' && isAnimating ? 'bg-yellow-50 ring-4 ring-yellow-400' : 'bg-indigo-50'
                    }`}
                    interactive={true}
                  />
@@ -511,9 +516,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                </div>
             </div>
 
-            {/* The Deck / Center Card (RIGHT) */}
+            {/* The Deck / Snap Card (RIGHT) */}
             <div className="relative group">
-              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-xs uppercase">Center</div>
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-xs uppercase">Snap Card</div>
                {centerCard ? (
                  <Card
                    card={centerCard}
