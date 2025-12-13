@@ -504,10 +504,10 @@ async function runPenaltyEdgeCaseTests() {
     }));
 
     const penalty = await waitForMessage(host, 'penalty', 2000);
-    const penaltyDuration = penalty.payload.until - Date.now();
+    const penaltyDuration = penalty.payload.durationMs || 3000;
 
     // Wait for penalty to expire (server uses 3000ms penalty)
-    await sleep(Math.max(penaltyDuration + 100, 3100));
+    await sleep(penaltyDuration + 100);
 
     // Now valid match should work
     const match = findMatchingSymbol(host.yourCard, host.centerCard);

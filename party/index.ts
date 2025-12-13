@@ -5,6 +5,7 @@ import {
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
 import { generateDeck, SYMBOLS } from "../shared/gameLogic";
+import { SYMBOLS_HARD } from "../constants";
 import { CardDifficulty } from "../shared/types";
 
 const PENALTY_DURATION = 3000;
@@ -16,6 +17,7 @@ const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
 export default class SameSnapRoom implements Party.Server {
   private phase: RoomPhase = RoomPhase.WAITING;
   private players: Map<string, ServerPlayer> = new Map();
+  private connectionToPlayerId: Map<string, string> = new Map();
   private hostId: string | null = null;
   private deck: CardData[] = [];
   private fullDeck: CardData[] = [];
@@ -24,6 +26,7 @@ export default class SameSnapRoom implements Party.Server {
   private roundNumber: number = 0;
   private roundWinnerId: string | null = null;
   private roundMatchedSymbolId: number | null = null;
+  private roundsCompleted: number = 0;
   private penalties: Map<string, number> = new Map();
   private pendingArbitration: {
     roundNumber: number;
@@ -31,11 +34,17 @@ export default class SameSnapRoom implements Party.Server {
     attempts: MatchAttempt[];
     timeoutId: ReturnType<typeof setTimeout> | null;
   } | null = null;
-  private disconnectedPlayers: Map<string, { player: ServerPlayer; disconnectedAt: number }> = new Map();
+  private disconnectedPlayers: Map<string, { disconnectedAt: number }> = new Map();
 
   // Room timeout tracking
   private roomExpiresAt: number | null = null;
   private roomTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  // Countdown timer tracking
+  private countdownTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  // Round-end timer tracking (for next round transition)
+  private roundEndTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly room: Party.Room) {}
 
@@ -52,7 +61,9 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   onClose(conn: Party.Connection) {
-    const player = this.players.get(conn.id);
+    const playerId = this.connectionToPlayerId.get(conn.id);
+    if (!playerId) return;
+    const player = this.players.get(playerId);
     if (!player) return;
 
     // Always give a short grace period for reconnection
@@ -60,12 +71,23 @@ export default class SameSnapRoom implements Party.Server {
     const gracePeriod = this.phase === RoomPhase.WAITING ? 2000 : RECONNECT_GRACE_PERIOD;
 
     player.status = PlayerStatus.DISCONNECTED;
-    this.disconnectedPlayers.set(conn.id, { player, disconnectedAt: Date.now() });
-    this.broadcastToAll({ type: 'player_disconnected', payload: { playerId: conn.id } });
+    this.disconnectedPlayers.set(playerId, { disconnectedAt: Date.now() });
+    this.connectionToPlayerId.delete(conn.id);
+    this.broadcastToAll({ type: 'player_disconnected', payload: { playerId } });
+
+    // During countdown, check if we still have enough connected players
+    if (this.phase === RoomPhase.COUNTDOWN) {
+      const connectedCount = Array.from(this.players.values())
+        .filter(p => p.status === PlayerStatus.CONNECTED).length;
+      const requiredPlayers = this.config?.targetPlayers ?? 2;
+      if (connectedCount < requiredPlayers) {
+        this.cancelCountdown();
+      }
+    }
 
     setTimeout(() => {
-      if (this.disconnectedPlayers.has(conn.id)) {
-        this.removePlayer(conn.id);
+      if (this.disconnectedPlayers.has(playerId)) {
+        this.removePlayer(playerId);
       }
     }, gracePeriod);
   }
@@ -78,6 +100,9 @@ export default class SameSnapRoom implements Party.Server {
         case 'join':
           this.handleJoin(sender, msg.payload.playerName);
           break;
+        case 'reconnect':
+          this.handleReconnectMessage(sender, msg.payload.playerId);
+          break;
         case 'set_config':
           this.handleSetConfig(sender, msg.payload.config);
           break;
@@ -87,18 +112,26 @@ export default class SameSnapRoom implements Party.Server {
         case 'match_attempt':
           this.handleMatchAttempt(sender.id, msg.payload.symbolId, msg.payload.clientTimestamp);
           break;
-        case 'leave':
-          this.removePlayer(sender.id);
+        case 'leave': {
+          const playerId = this.getPlayerIdByConnection(sender.id);
+          if (playerId) {
+            this.removePlayer(playerId);
+          }
           break;
+        }
         case 'kick_player':
           this.handleKickPlayer(sender.id, msg.payload.playerId);
           break;
-        case 'ping':
-          this.sendToPlayer(sender.id, {
-            type: 'pong',
-            payload: { serverTimestamp: Date.now(), clientTimestamp: msg.payload.timestamp }
-          });
+        case 'ping': {
+          const playerId = this.getPlayerIdByConnection(sender.id);
+          if (playerId) {
+            this.sendToPlayer(playerId, {
+              type: 'pong',
+              payload: { serverTimestamp: Date.now(), clientTimestamp: msg.payload.timestamp }
+            });
+          }
           break;
+        }
       }
     } catch (e) {
       console.error('Invalid message:', e);
@@ -108,19 +141,19 @@ export default class SameSnapRoom implements Party.Server {
   private handleJoin(conn: Party.Connection, playerName: string) {
     // Check if room is full (max 8)
     if (this.players.size >= 8) {
-      this.sendToPlayer(conn.id, {
+      conn.send(JSON.stringify({
         type: 'error',
         payload: { code: ERROR_CODES.ROOM_FULL, message: 'Room is full' }
-      });
+      }));
       return;
     }
 
     // Check if game in progress
     if (this.phase !== RoomPhase.WAITING) {
-      this.sendToPlayer(conn.id, {
+      conn.send(JSON.stringify({
         type: 'error',
         payload: { code: ERROR_CODES.GAME_IN_PROGRESS, message: 'Game already in progress' }
-      });
+      }));
       return;
     }
 
@@ -129,8 +162,10 @@ export default class SameSnapRoom implements Party.Server {
     const finalName = nameTaken ? `${playerName} ${this.players.size + 1}` : playerName;
 
     const isHost = this.players.size === 0;
+    const playerId = this.generatePlayerId();
     const player: ServerPlayer = {
-      id: conn.id,
+      id: playerId,
+      connectionId: conn.id,
       name: finalName,
       status: PlayerStatus.CONNECTED,
       score: 0,
@@ -140,10 +175,11 @@ export default class SameSnapRoom implements Party.Server {
       lastSeen: Date.now(),
     };
 
-    this.players.set(conn.id, player);
+    this.players.set(playerId, player);
+    this.connectionToPlayerId.set(conn.id, playerId);
 
     if (isHost) {
-      this.hostId = conn.id;
+      this.hostId = playerId;
 
       // Initialize default config so auto-start works immediately
       this.config = {
@@ -151,20 +187,17 @@ export default class SameSnapRoom implements Party.Server {
         targetPlayers: DEFAULT_TARGET_PLAYERS,
       };
 
-      this.sendToPlayer(conn.id, { type: 'you_are_host', payload: {} });
+      this.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
 
       // Start room timeout when first player joins
       this.startRoomTimeout();
     }
 
-    // Broadcast to others
-    this.broadcastToAll({
-      type: 'player_joined',
-      payload: { player: this.toClientPlayer(player, conn.id) }
-    });
+    // Broadcast to others (per-connection so isYou stays accurate)
+    this.broadcastPlayerJoined(player);
 
     // Send full state to new player
-    this.sendRoomState(conn.id);
+    this.sendRoomState(playerId);
 
     // Check if we've reached target players and should auto-start
     // Delay slightly to ensure room_state message is received before countdown starts
@@ -217,9 +250,10 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private handleSetConfig(conn: Party.Connection, config: MultiplayerGameConfig) {
-    const player = this.players.get(conn.id);
-    if (!player?.isHost) {
-      this.sendToPlayer(conn.id, {
+    const player = this.getPlayerByConnection(conn.id);
+    if (!player) return;
+    if (!player.isHost) {
+      this.sendToPlayer(player.id, {
         type: 'error',
         payload: { code: ERROR_CODES.NOT_HOST, message: 'Only host can set config' }
       });
@@ -227,7 +261,7 @@ export default class SameSnapRoom implements Party.Server {
     }
 
     if (this.phase !== RoomPhase.WAITING) {
-      this.sendToPlayer(conn.id, {
+      this.sendToPlayer(player.id, {
         type: 'error',
         payload: { code: ERROR_CODES.INVALID_STATE, message: 'Cannot change config after game started' }
       });
@@ -247,9 +281,10 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private handleStartGame(conn: Party.Connection, config: MultiplayerGameConfig) {
-    const player = this.players.get(conn.id);
-    if (!player?.isHost) {
-      this.sendToPlayer(conn.id, {
+    const player = this.getPlayerByConnection(conn.id);
+    if (!player) return;
+    if (!player.isHost) {
+      this.sendToPlayer(player.id, {
         type: 'error',
         payload: { code: ERROR_CODES.NOT_HOST, message: 'Only host can start' }
       });
@@ -257,7 +292,7 @@ export default class SameSnapRoom implements Party.Server {
     }
 
     if (this.players.size < 2) {
-      this.sendToPlayer(conn.id, {
+      this.sendToPlayer(player.id, {
         type: 'error',
         payload: { code: ERROR_CODES.INVALID_STATE, message: 'Need at least 2 players' }
       });
@@ -280,19 +315,60 @@ export default class SameSnapRoom implements Party.Server {
     this.roomExpiresAt = null;
 
     const tick = () => {
+      // Guard: abort if we're no longer in countdown phase
+      if (this.phase !== RoomPhase.COUNTDOWN) {
+        this.countdownTimeoutId = null;
+        return;
+      }
+
       this.broadcastToAll({ type: 'countdown', payload: { seconds: count } });
       if (count > 0) {
         count--;
-        setTimeout(tick, 1000);
+        this.countdownTimeoutId = setTimeout(tick, 1000);
       } else {
-        this.startGame();
+        this.countdownTimeoutId = null;
+        // Guard: only start if we still have enough players (use targetPlayers, fallback to 2)
+        const requiredPlayers = this.config?.targetPlayers ?? 2;
+        if (this.players.size >= requiredPlayers) {
+          this.startGame();
+        } else {
+          // Not enough players, return to waiting
+          this.phase = RoomPhase.WAITING;
+          this.broadcastToAll({ type: 'countdown', payload: { seconds: -1 } }); // Signal countdown cancelled
+          // Re-arm room timeout since we're back to waiting
+          this.startRoomTimeout();
+          // Broadcast fresh room_state so clients have updated phase and roomExpiresAt
+          this.broadcastRoomState();
+          // Re-check auto-start in case conditions are still met (e.g., targetPlayers was lowered)
+          setTimeout(() => this.checkAutoStart(), 50);
+        }
       }
     };
     tick();
   }
 
+  private cancelCountdown() {
+    if (this.countdownTimeoutId) {
+      clearTimeout(this.countdownTimeoutId);
+      this.countdownTimeoutId = null;
+    }
+    if (this.phase === RoomPhase.COUNTDOWN) {
+      this.phase = RoomPhase.WAITING;
+      // Re-arm room timeout since we're back to waiting
+      this.startRoomTimeout();
+      // Notify clients that countdown was cancelled
+      this.broadcastToAll({ type: 'countdown', payload: { seconds: -1 } });
+      // Broadcast fresh room_state so clients have updated phase and roomExpiresAt
+      this.broadcastRoomState();
+    }
+  }
+
   private startGame() {
-    this.fullDeck = generateDeck();
+    // Use appropriate symbol set based on card difficulty
+    const symbols = this.config?.cardDifficulty === CardDifficulty.HARD
+      ? SYMBOLS_HARD
+      : SYMBOLS;
+    this.fullDeck = generateDeck(7, symbols);
     this.deck = [...this.fullDeck];
     this.roundNumber = 0;
     this.penalties.clear();
@@ -308,6 +384,7 @@ export default class SameSnapRoom implements Party.Server {
     this.centerCard = this.deck.pop() || null;
     this.phase = RoomPhase.PLAYING;
     this.roundNumber = 1;
+    this.roundsCompleted = 0;
 
     // Send round_start to each player with their personal card
     this.players.forEach((player, playerId) => {
@@ -315,13 +392,20 @@ export default class SameSnapRoom implements Party.Server {
       if (yourCard && this.centerCard) {
         this.sendToPlayer(playerId, {
           type: 'round_start',
-          payload: { centerCard: this.centerCard, yourCard, roundNumber: this.roundNumber }
+          payload: {
+            centerCard: this.centerCard,
+            yourCard,
+            roundNumber: this.roundsCompleted + 1,
+            deckRemaining: this.getDrawPileRemaining()
+          }
         });
       }
     });
   }
 
-  private handleMatchAttempt(playerId: string, symbolId: number, clientTimestamp: number) {
+  private handleMatchAttempt(connectionId: string, symbolId: number, clientTimestamp: number) {
+    const playerId = this.connectionToPlayerId.get(connectionId);
+    if (!playerId) return;
     const serverTimestamp = Date.now();
 
     if (this.phase !== RoomPhase.PLAYING) return;
@@ -352,7 +436,7 @@ export default class SameSnapRoom implements Party.Server {
       this.penalties.set(playerId, until);
       this.sendToPlayer(playerId, {
         type: 'penalty',
-        payload: { until, reason: 'Wrong symbol' }
+        payload: { serverTimestamp, durationMs: PENALTY_DURATION, reason: 'Wrong symbol' }
       });
       return;
     }
@@ -401,6 +485,7 @@ export default class SameSnapRoom implements Party.Server {
     this.roundWinnerId = winnerId;
     this.roundMatchedSymbolId = symbolId;
     winner.score += 1;
+    this.roundsCompleted += 1;
 
     // Broadcast winner
     this.broadcastToAll({
@@ -408,11 +493,17 @@ export default class SameSnapRoom implements Party.Server {
       payload: { winnerId, winnerName: winner.name, matchedSymbolId: symbolId }
     });
 
-    // After 2 seconds, next round
-    setTimeout(() => this.nextRound(winnerId), 2000);
+    // After 2 seconds, next round (track timer so it can be cancelled if game ends early)
+    this.roundEndTimeoutId = setTimeout(() => {
+      this.roundEndTimeoutId = null;
+      this.nextRound(winnerId);
+    }, 2000);
   }
 
   private nextRound(lastWinnerId: string) {
+    // Guard: don't proceed if game has ended or we're not in ROUND_END phase
+    if (this.phase !== RoomPhase.ROUND_END) return;
+
     const winner = this.players.get(lastWinnerId);
     if (!winner || !this.centerCard) return;
 
@@ -438,13 +529,24 @@ export default class SameSnapRoom implements Party.Server {
       if (yourCard && this.centerCard) {
         this.sendToPlayer(playerId, {
           type: 'round_start',
-          payload: { centerCard: this.centerCard, yourCard, roundNumber: this.roundNumber }
+          payload: {
+            centerCard: this.centerCard,
+            yourCard,
+            roundNumber: this.roundsCompleted + 1,
+            deckRemaining: this.getDrawPileRemaining()
+          }
         });
       }
     });
   }
 
   private endGame() {
+    // Clear any pending round-end timer to prevent nextRound from firing
+    if (this.roundEndTimeoutId) {
+      clearTimeout(this.roundEndTimeoutId);
+      this.roundEndTimeoutId = null;
+    }
+
     this.phase = RoomPhase.GAME_OVER;
     const finalScores = Array.from(this.players.values())
       .map(p => ({ playerId: p.id, name: p.name, score: p.score }))
@@ -453,10 +555,10 @@ export default class SameSnapRoom implements Party.Server {
     this.broadcastToAll({ type: 'game_over', payload: { finalScores } });
   }
 
-  private handleKickPlayer(hostId: string, targetId: string) {
-    const host = this.players.get(hostId);
+  private handleKickPlayer(hostConnectionId: string, targetPlayerId: string) {
+    const host = this.getPlayerByConnection(hostConnectionId);
     if (!host?.isHost) return;
-    this.removePlayer(targetId);
+    this.removePlayer(targetPlayerId);
   }
 
   private removePlayer(playerId: string) {
@@ -465,6 +567,7 @@ export default class SameSnapRoom implements Party.Server {
 
     this.players.delete(playerId);
     this.disconnectedPlayers.delete(playerId);
+    this.connectionToPlayerId.delete(player.connectionId);
 
     this.broadcastToAll({
       type: 'player_left',
@@ -474,30 +577,73 @@ export default class SameSnapRoom implements Party.Server {
     // Reassign host if needed
     if (player.isHost && this.players.size > 0) {
       const newHost = Array.from(this.players.values())[0];
-      newHost.isHost = true;
+      this.players.forEach(p => {
+        p.isHost = p.id === newHost.id;
+      });
       this.hostId = newHost.id;
       this.sendToPlayer(newHost.id, { type: 'you_are_host', payload: {} });
+      this.broadcastToAll({
+        type: 'host_changed',
+        payload: { playerId: newHost.id }
+      });
+    } else if (this.players.size === 0) {
+      this.hostId = null;
     }
 
-    // Check if game should end
-    if (this.phase !== RoomPhase.WAITING && this.players.size < 2) {
-      this.endGame();
+    // Check if countdown should be cancelled or game should end
+    if (this.players.size < 2) {
+      if (this.phase === RoomPhase.COUNTDOWN) {
+        this.cancelCountdown();
+      } else if (this.phase !== RoomPhase.WAITING) {
+        this.endGame();
+      }
     }
   }
 
-  private handleReconnection(conn: Party.Connection, oldId: string) {
-    const data = this.disconnectedPlayers.get(oldId);
-    if (!data) return;
+  private handleReconnection(conn: Party.Connection, playerId: string) {
+    if (!this.disconnectedPlayers.has(playerId)) return;
+    this.disconnectedPlayers.delete(playerId);
 
-    this.disconnectedPlayers.delete(oldId);
-    const player = { ...data.player, id: conn.id, status: PlayerStatus.CONNECTED };
-    this.players.delete(oldId);
-    this.players.set(conn.id, player);
+    const player = this.players.get(playerId);
+    if (!player) return;
 
-    if (player.isHost) this.hostId = conn.id;
+    player.connectionId = conn.id;
+    player.status = PlayerStatus.CONNECTED;
+    player.lastSeen = Date.now();
 
-    this.broadcastToAll({ type: 'player_reconnected', payload: { playerId: conn.id } });
-    this.sendRoomState(conn.id);
+    this.connectionToPlayerId.set(conn.id, playerId);
+
+    if (player.isHost) this.hostId = playerId;
+
+    this.broadcastToAll({ type: 'player_reconnected', payload: { playerId } });
+    this.sendRoomState(playerId);
+  }
+
+  // Handle reconnect message (alternative to URL-based reconnection)
+  // This allows mid-session reconnects when the socket URL can't be changed dynamically
+  private handleReconnectMessage(conn: Party.Connection, playerId: string) {
+    // Check if this is a valid reconnection attempt
+    if (this.disconnectedPlayers.has(playerId)) {
+      // Valid reconnection - use the same logic as URL-based reconnection
+      this.handleReconnection(conn, playerId);
+    } else if (this.players.has(playerId)) {
+      // Player exists and is connected - this might be a duplicate connection
+      // Just send the room state to sync them up
+      const player = this.players.get(playerId);
+      if (player) {
+        // Update connection mapping
+        this.connectionToPlayerId.delete(player.connectionId);
+        player.connectionId = conn.id;
+        this.connectionToPlayerId.set(conn.id, playerId);
+        this.sendRoomState(playerId);
+      }
+    } else {
+      // Unknown player ID - reject with error
+      conn.send(JSON.stringify({
+        type: 'error',
+        payload: { code: ERROR_CODES.GAME_IN_PROGRESS, message: 'Cannot reconnect - player not found or session expired' }
+      }));
+    }
   }
 
   private getCardById(cardId: number | null): CardData | null {
@@ -517,23 +663,48 @@ export default class SameSnapRoom implements Party.Server {
     };
   }
 
+  private getTotalDrawPile(): number {
+    if (!this.config) return 0;
+    return Math.max(0, this.fullDeck.length - this.players.size - 1);
+  }
+
+  private getDrawPileRemaining(): number {
+    const total = this.getTotalDrawPile();
+    if (
+      this.phase === RoomPhase.PLAYING ||
+      this.phase === RoomPhase.COUNTDOWN ||
+      this.phase === RoomPhase.ROUND_END
+    ) {
+      return Math.max(0, total - this.roundsCompleted);
+    }
+    return total;
+  }
+
+  private getPenaltyRemainingMs(playerId: string): number | undefined {
+    const penaltyUntil = this.penalties.get(playerId);
+    if (!penaltyUntil) return undefined;
+    const remaining = penaltyUntil - Date.now();
+    return remaining > 0 ? remaining : undefined;
+  }
+
   private sendRoomState(playerId: string) {
     const player = this.players.get(playerId);
     if (!player) return;
 
+    const currentRoundNumber = this.phase === RoomPhase.WAITING ? 0 : this.roundsCompleted + 1;
     const state: ClientRoomState = {
       roomCode: this.room.id,
       phase: this.phase,
       players: Array.from(this.players.values()).map(p => this.toClientPlayer(p, playerId)),
       config: this.config,
-      deckRemaining: this.deck.length,
+      deckRemaining: this.getDrawPileRemaining(),
       centerCard: this.centerCard,
       yourCard: this.getCardById(player.handCardId),
       roundWinnerId: this.roundWinnerId,
       roundWinnerName: this.roundWinnerId ? this.players.get(this.roundWinnerId)?.name || null : null,
       roundMatchedSymbolId: this.roundMatchedSymbolId,
-      roundNumber: this.roundNumber,
-      penaltyUntil: this.penalties.get(playerId),
+      roundNumber: currentRoundNumber,
+      penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
       targetPlayers: this.config?.targetPlayers,
     };
@@ -541,12 +712,51 @@ export default class SameSnapRoom implements Party.Server {
     this.sendToPlayer(playerId, { type: 'room_state', payload: state });
   }
 
+  private broadcastRoomState() {
+    // Send personalized room_state to each connected player
+    for (const [playerId, player] of this.players) {
+      if (player.status === PlayerStatus.CONNECTED) {
+        this.sendRoomState(playerId);
+      }
+    }
+  }
+
+  private getPlayerIdByConnection(connectionId: string): string | null {
+    return this.connectionToPlayerId.get(connectionId) || null;
+  }
+
+  private getPlayerByConnection(connectionId: string): ServerPlayer | null {
+    const playerId = this.getPlayerIdByConnection(connectionId);
+    if (!playerId) return null;
+    return this.players.get(playerId) || null;
+  }
+
+  private generatePlayerId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    return Math.random().toString(36).slice(2, 10);
+  }
+
   private sendToPlayer(playerId: string, message: ServerMessage) {
-    const conn = this.room.getConnection(playerId);
+    const player = this.players.get(playerId);
+    if (!player) return;
+    const conn = this.room.getConnection(player.connectionId);
     if (conn) conn.send(JSON.stringify(message));
   }
 
   private broadcastToAll(message: ServerMessage) {
     this.room.broadcast(JSON.stringify(message));
+  }
+
+  private broadcastPlayerJoined(player: ServerPlayer) {
+    for (const conn of this.room.getConnections()) {
+      const targetPlayerId = this.connectionToPlayerId.get(conn.id);
+      if (!targetPlayerId) continue;
+      conn.send(JSON.stringify({
+        type: 'player_joined',
+        payload: { player: this.toClientPlayer(player, targetPlayerId) }
+      }));
+    }
   }
 }

@@ -12,8 +12,9 @@ interface WaitingRoomProps {
 
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplayerHook }) => {
   const [copied, setCopied] = useState(false);
-  const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
-  const [targetPlayers, setTargetPlayers] = useState(2);
+  // Local state for host controls - always synced from server config when it changes
+  const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
+  const [targetPlayers, setTargetPlayers] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
@@ -31,12 +32,30 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   // Check if mobile portrait
   const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
-  // Send config when host changes settings
+  // Always sync local state FROM server config when it changes
+  // This ensures new hosts see the correct config after host transfer
   useEffect(() => {
-    if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty, targetPlayers });
+    if (roomState?.config) {
+      setCardDifficulty(roomState.config.cardDifficulty);
+      setTargetPlayers(roomState.config.targetPlayers);
     }
-  }, [isHost, cardDifficulty, targetPlayers, setConfig, roomState?.phase]);
+  }, [roomState?.config?.cardDifficulty, roomState?.config?.targetPlayers]);
+
+  // Handler for when host explicitly changes card difficulty
+  const handleCardDifficultyChange = (newDifficulty: CardDifficulty) => {
+    setCardDifficulty(newDifficulty);
+    if (isHost && roomState?.phase === RoomPhase.WAITING) {
+      setConfig({ cardDifficulty: newDifficulty, targetPlayers: targetPlayers ?? 2 });
+    }
+  };
+
+  // Handler for when host explicitly changes target players
+  const handleTargetPlayersChange = (newTarget: number) => {
+    setTargetPlayers(newTarget);
+    if (isHost && roomState?.phase === RoomPhase.WAITING) {
+      setConfig({ cardDifficulty: cardDifficulty ?? CardDifficulty.EASY, targetPlayers: newTarget });
+    }
+  };
 
   // Note: Navigation to game is now handled by MultiplayerWrapper in App.tsx
 
@@ -64,7 +83,10 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   };
 
   const handleStartGame = () => {
-    startGame({ cardDifficulty, targetPlayers });
+    startGame({
+      cardDifficulty: cardDifficulty ?? CardDifficulty.EASY,
+      targetPlayers: targetPlayers ?? 2
+    });
   };
 
   const handleLeave = () => {
@@ -73,7 +95,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   };
 
   const currentPlayers = roomState?.players.length || 0;
-  const effectiveTarget = roomState?.targetPlayers || targetPlayers;
+  const effectiveTarget = roomState?.targetPlayers ?? targetPlayers ?? 2;
   const playersNeeded = Math.max(0, effectiveTarget - currentPlayers);
   const canStart = isHost && currentPlayers >= 2;
 
@@ -186,7 +208,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                   <button
                     key={num}
                     type="button"
-                    onClick={() => setTargetPlayers(num)}
+                    onClick={() => handleTargetPlayersChange(num)}
                     className={`w-8 h-8 rounded-lg font-bold text-sm transition-all ${
                       targetPlayers === num
                         ? 'bg-indigo-600 text-white shadow-lg scale-110'
@@ -204,7 +226,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
               <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
               <div className="grid grid-cols-3 gap-2">
                 <button
-                  onClick={() => setCardDifficulty(CardDifficulty.EASY)}
+                  onClick={() => handleCardDifficultyChange(CardDifficulty.EASY)}
                   className={`py-2 rounded-xl text-sm font-bold transition-all ${
                     cardDifficulty === CardDifficulty.EASY
                       ? 'bg-blue-500 text-white'
@@ -214,7 +236,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                   Easy
                 </button>
                 <button
-                  onClick={() => setCardDifficulty(CardDifficulty.MEDIUM)}
+                  onClick={() => handleCardDifficultyChange(CardDifficulty.MEDIUM)}
                   className={`py-2 rounded-xl text-sm font-bold transition-all ${
                     cardDifficulty === CardDifficulty.MEDIUM
                       ? 'bg-orange-500 text-white'
@@ -224,7 +246,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                   Medium
                 </button>
                 <button
-                  onClick={() => setCardDifficulty(CardDifficulty.HARD)}
+                  onClick={() => handleCardDifficultyChange(CardDifficulty.HARD)}
                   className={`py-2 rounded-xl text-sm font-bold transition-all ${
                     cardDifficulty === CardDifficulty.HARD
                       ? 'bg-red-500 text-white'

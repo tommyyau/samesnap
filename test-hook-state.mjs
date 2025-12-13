@@ -58,15 +58,23 @@ class HookSimulator {
     switch (message.type) {
       case 'room_state':
         this.hasReceivedRoomState = true;
+        // Convert server's penaltyRemainingMs to client-local penaltyUntil (clock-skew safe)
+        const clientPenaltyUntil = message.payload.penaltyRemainingMs
+          ? Date.now() + message.payload.penaltyRemainingMs
+          : undefined;
+        const stateWithClientPenalty = {
+          ...message.payload,
+          penaltyUntil: clientPenaltyUntil,
+        };
         if (this.pendingCountdown !== null) {
           this.roomState = {
-            ...message.payload,
+            ...stateWithClientPenalty,
             phase: 'COUNTDOWN',
             countdown: this.pendingCountdown,
           };
           this.pendingCountdown = null;
         } else {
-          this.roomState = message.payload;
+          this.roomState = stateWithClientPenalty;
         }
         const me = message.payload.players?.find(p => p.isYou);
         if (me) this.isHost = me.isHost;
@@ -115,6 +123,7 @@ class HookSimulator {
             centerCard: message.payload.centerCard,
             yourCard: message.payload.yourCard,
             roundNumber: message.payload.roundNumber,
+            deckRemaining: message.payload.deckRemaining ?? this.roomState.deckRemaining,
             roundWinnerId: null,
             roundMatchedSymbolId: null,
           };
@@ -137,10 +146,11 @@ class HookSimulator {
         break;
 
       case 'penalty':
+        // Convert server duration to client-local timestamp (clock-skew safe)
         if (this.roomState) {
           this.roomState = {
             ...this.roomState,
-            penaltyUntil: message.payload.until
+            penaltyUntil: Date.now() + message.payload.durationMs
           };
         }
         break;
@@ -163,6 +173,18 @@ class HookSimulator {
               };
             })
           };
+        }
+        break;
+
+      case 'host_changed':
+        if (this.roomState) {
+          const players = this.roomState.players.map(p => ({
+            ...p,
+            isHost: p.id === message.payload.playerId
+          }));
+          this.roomState = { ...this.roomState, players };
+          const me = players.find(p => p.isYou);
+          this.isHost = !!me?.isHost;
         }
         break;
 
@@ -505,30 +527,146 @@ async function testRoundWinnerMessage() {
 }
 
 // ============================================
-// TEST SUITE 6: PENALTY MESSAGE
+// TEST SUITE 6: HOST_CHANGED MESSAGE
+// ============================================
+async function testHostChangedMessage() {
+  console.log('\n👑 HOST_CHANGED MESSAGE TESTS\n');
+
+  await test('host_changed updates players and host flag', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'WAITING',
+        players: [
+          { id: 'host', name: 'Host', isHost: true, isYou: false, score: 0, status: 'connected' },
+          { id: 'me', name: 'Me', isHost: false, isYou: true, score: 0, status: 'connected' }
+        ],
+        config: {}
+      }
+    });
+
+    if (hook.isHost) throw new Error('Should not be host initially');
+
+    hook.handleMessage({ type: 'host_changed', payload: { playerId: 'me' } });
+    if (!hook.isHost) throw new Error('Should become host after host_changed');
+    const me = hook.roomState.players.find(p => p.id === 'me');
+    const other = hook.roomState.players.find(p => p.id === 'host');
+    if (!me.isHost) throw new Error('Players array should show new host');
+    if (other.isHost) throw new Error('Previous host should lose host flag');
+
+    hook.handleMessage({ type: 'host_changed', payload: { playerId: 'host' } });
+    if (hook.isHost) throw new Error('Should no longer be host when host changes back');
+  });
+}
+
+// ============================================
+// TEST SUITE 7: PENALTY MESSAGE
 // ============================================
 async function testPenaltyMessage() {
   console.log('\n⚠️ PENALTY MESSAGE TESTS\n');
 
-  await test('penalty sets penaltyUntil timestamp', async () => {
+  await test('penalty sets penaltyUntil from durationMs (clock-skew safe)', async () => {
     const hook = new HookSimulator();
     hook.handleMessage({
       type: 'room_state',
       payload: { phase: 'PLAYING', players: [], config: {} }
     });
 
-    const futureTime = Date.now() + 1000;
+    const beforeTime = Date.now();
     hook.handleMessage({
       type: 'penalty',
-      payload: { until: futureTime }
+      payload: { serverTimestamp: 1000000000, durationMs: 3000, reason: 'Wrong symbol' }
+    });
+    const afterTime = Date.now();
+
+    // penaltyUntil should be ~3000ms from now, regardless of serverTimestamp
+    const expectedMin = beforeTime + 3000;
+    const expectedMax = afterTime + 3000;
+    if (hook.roomState.penaltyUntil < expectedMin || hook.roomState.penaltyUntil > expectedMax) {
+      throw new Error(`penaltyUntil should be ~3000ms in the future, got ${hook.roomState.penaltyUntil - Date.now()}ms`);
+    }
+  });
+
+  await test('penalty duration is independent of server clock (clock skew regression)', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: { phase: 'PLAYING', players: [], config: {} }
     });
 
-    if (hook.roomState.penaltyUntil !== futureTime) throw new Error('penaltyUntil should be set');
+    // Simulate server with wildly different clock (5 seconds in the past)
+    const serverTime = Date.now() - 5000;
+    hook.handleMessage({
+      type: 'penalty',
+      payload: { serverTimestamp: serverTime, durationMs: 3000, reason: 'Wrong symbol' }
+    });
+
+    // The penalty should STILL last ~3 seconds from client's perspective
+    const remainingMs = hook.roomState.penaltyUntil - Date.now();
+    if (remainingMs < 2900 || remainingMs > 3100) {
+      throw new Error(`Penalty should last ~3s regardless of server clock skew, got ${remainingMs}ms`);
+    }
+  });
+
+  await test('penalty duration works when server clock is ahead (clock skew regression)', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: { phase: 'PLAYING', players: [], config: {} }
+    });
+
+    // Simulate server with clock 5 seconds AHEAD
+    const serverTime = Date.now() + 5000;
+    hook.handleMessage({
+      type: 'penalty',
+      payload: { serverTimestamp: serverTime, durationMs: 3000, reason: 'Wrong symbol' }
+    });
+
+    // The penalty should STILL last ~3 seconds from client's perspective
+    const remainingMs = hook.roomState.penaltyUntil - Date.now();
+    if (remainingMs < 2900 || remainingMs > 3100) {
+      throw new Error(`Penalty should last ~3s regardless of server clock skew, got ${remainingMs}ms`);
+    }
+  });
+
+  await test('room_state penaltyRemainingMs converts to client-local penaltyUntil', async () => {
+    const hook = new HookSimulator();
+    const beforeTime = Date.now();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: {
+        phase: 'PLAYING',
+        players: [],
+        config: {},
+        penaltyRemainingMs: 2500  // 2.5 seconds remaining
+      }
+    });
+    const afterTime = Date.now();
+
+    // penaltyUntil should be ~2500ms from now
+    const expectedMin = beforeTime + 2500;
+    const expectedMax = afterTime + 2500;
+    if (hook.roomState.penaltyUntil < expectedMin || hook.roomState.penaltyUntil > expectedMax) {
+      throw new Error(`penaltyUntil from room_state should be ~2500ms in the future`);
+    }
+  });
+
+  await test('room_state without penalty does not set penaltyUntil', async () => {
+    const hook = new HookSimulator();
+    hook.handleMessage({
+      type: 'room_state',
+      payload: { phase: 'PLAYING', players: [], config: {} }
+    });
+
+    if (hook.roomState.penaltyUntil !== undefined) {
+      throw new Error('penaltyUntil should be undefined when no penalty');
+    }
   });
 }
 
 // ============================================
-// TEST SUITE 7: GAME_OVER MESSAGE
+// TEST SUITE 8: GAME_OVER MESSAGE
 // ============================================
 async function testGameOverMessage() {
   console.log('\n🎉 GAME_OVER MESSAGE TESTS\n');
@@ -582,7 +720,7 @@ async function testGameOverMessage() {
 }
 
 // ============================================
-// TEST SUITE 8: FULL FLOW SIMULATION
+// TEST SUITE 9: FULL FLOW SIMULATION
 // ============================================
 async function testFullFlowSimulation() {
   console.log('\n🔄 FULL FLOW SIMULATION TESTS\n');
@@ -666,6 +804,7 @@ async function runAllTests() {
   await testCountdownMessage();
   await testRoundStartMessage();
   await testRoundWinnerMessage();
+  await testHostChangedMessage();
   await testPenaltyMessage();
   await testGameOverMessage();
   await testFullFlowSimulation();

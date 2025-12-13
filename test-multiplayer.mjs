@@ -21,9 +21,10 @@ function generateRoomCode() {
   return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-function createPlayer(roomCode, playerName) {
+function createPlayer(roomCode, playerName, options = {}) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://${PARTYKIT_HOST}/party/${roomCode}`);
+    const queryString = options.reconnectId ? `?reconnectId=${options.reconnectId}` : '';
+    const ws = new WebSocket(`ws://${PARTYKIT_HOST}/party/${roomCode}${queryString}`);
     const player = {
       ws,
       name: playerName,
@@ -31,7 +32,8 @@ function createPlayer(roomCode, playerName) {
       messages: [],
       isHost: false,
       playerId: null,
-      connected: false
+      connected: false,
+      _resolved: false  // Track if we've resolved to avoid message duplication
     };
 
     const timeout = setTimeout(() => {
@@ -41,26 +43,33 @@ function createPlayer(roomCode, playerName) {
 
     ws.on('open', () => {
       player.connected = true;
-      // Send join message - server expects payload.playerName
-      ws.send(JSON.stringify({
-        type: 'join',
-        payload: { playerName }
-      }));
+      // Only send join message if not reconnecting
+      if (!options.reconnectId) {
+        ws.send(JSON.stringify({
+          type: 'join',
+          payload: { playerName }
+        }));
+      }
     });
 
     ws.on('message', (data) => {
       try {
         const msg = JSON.parse(data.toString());
-        player.messages.push(msg);
+        // Only push to messages array after resolved (for waitForMessage to find)
+        // Before resolved, we handle messages directly
+        if (player._resolved) {
+          player.messages.push(msg);
+        }
 
         if (msg.type === 'room_state') {
-          player.roomState = msg.payload;  // payload contains the state
+          player.roomState = msg.payload;
           const you = msg.payload.players.find(p => p.isYou);
           if (you) {
             player.playerId = you.id;
             player.isHost = you.isHost;
           }
           clearTimeout(timeout);
+          player._resolved = true;
           resolve(player);
         } else if (msg.type === 'you_are_host') {
           player.isHost = true;
@@ -84,10 +93,21 @@ function createPlayer(roomCode, playerName) {
   });
 }
 
+function findMatchingSymbol(yourCard, centerCard) {
+  if (!yourCard || !centerCard) return null;
+  for (const sym of yourCard.symbols) {
+    if (centerCard.symbols.some(s => s.id === sym.id)) {
+      return sym;
+    }
+  }
+  return null;
+}
+
 function waitForMessage(player, type, timeout = 5000) {
   return new Promise((resolve, reject) => {
-    const existing = player.messages.find(m => m.type === type);
-    if (existing) {
+    const existingIndex = player.messages.findIndex(m => m.type === type);
+    if (existingIndex !== -1) {
+      const existing = player.messages.splice(existingIndex, 1)[0];
       resolve(existing);
       return;
     }
@@ -96,16 +116,20 @@ function waitForMessage(player, type, timeout = 5000) {
       reject(new Error(`Timeout waiting for message type: ${type}`));
     }, timeout);
 
-    const originalOnMessage = player.ws.onmessage;
     player.ws.on('message', function handler(data) {
       try {
         const msg = JSON.parse(data.toString());
-        player.messages.push(msg);
         if (msg.type === type) {
           clearTimeout(timer);
           player.ws.removeListener('message', handler);
+          // Remove from messages array if createPlayer handler pushed it first
+          const idx = player.messages.findIndex(m => m.type === type);
+          if (idx !== -1) {
+            player.messages.splice(idx, 1);
+          }
           resolve(msg);
         }
+        // Don't push non-matching messages - createPlayer handler already does
       } catch (e) {}
     });
   });
@@ -159,6 +183,10 @@ function cleanup(...players) {
       p.ws.close();
     }
   });
+}
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ============================================
@@ -217,6 +245,58 @@ async function runRoomTests() {
     }
 
     cleanup(...players);
+  });
+
+  await test('player_joined marks only the joining socket as isYou', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    host.messages = [];
+
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    const hostJoinMsg = host.messages.find(m => m.type === 'player_joined' && m.payload?.player?.id === guest.playerId);
+    if (!hostJoinMsg) {
+      throw new Error('Host did not receive player_joined for guest');
+    }
+    if (hostJoinMsg.payload.player.isYou) {
+      throw new Error('Host should not see guest as isYou');
+    }
+
+    // Guest's player_joined arrives before room_state, so check room_state instead
+    // which contains the same isYou flag information
+    const guestInState = guest.roomState.players.find(p => p.id === guest.playerId);
+    if (!guestInState) {
+      throw new Error('Guest not found in room_state');
+    }
+    if (!guestInState.isYou) {
+      throw new Error('Guest should see themselves as isYou in room_state');
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('Host reassignment notifies all players', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest1 = await createPlayer(roomCode, 'Guest1');
+    const guest2 = await createPlayer(roomCode, 'Guest2');
+
+    guest1.messages = [];
+    guest2.messages = [];
+
+    host.ws.send(JSON.stringify({ type: 'leave', payload: {} }));
+    host.ws.close();
+
+    const hostChangedGuest1 = await waitForMessage(guest1, 'host_changed', 3000);
+    if (hostChangedGuest1.payload.playerId !== guest1.playerId) {
+      throw new Error('Guest1 should become host');
+    }
+    const hostChangedGuest2 = await waitForMessage(guest2, 'host_changed', 3000);
+    if (hostChangedGuest2.payload.playerId !== guest1.playerId) {
+      throw new Error('Guest2 should be notified of new host');
+    }
+
+    cleanup(guest1, guest2);
   });
 }
 
@@ -376,6 +456,41 @@ async function runGameFlowTests() {
 
     cleanup(host, guest);
   });
+
+  await test('round_start includes accurate deckRemaining values', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+    }));
+
+    const firstRound = await waitForMessage(host, 'round_start', 10000);
+    console.log('DEBUG first deck', firstRound.payload.deckRemaining);
+    const expectedRemaining = 57 - 2 - 1;
+    if (firstRound.payload.deckRemaining !== expectedRemaining) {
+      throw new Error(`Expected ${expectedRemaining} cards remaining, got ${firstRound.payload.deckRemaining}`);
+    }
+
+    const match = findMatchingSymbol(firstRound.payload.yourCard, firstRound.payload.centerCard);
+    if (!match) throw new Error('No matching symbol found');
+
+    host.ws.send(JSON.stringify({
+      type: 'match_attempt',
+      payload: { symbolId: match.id, clientTimestamp: Date.now() }
+    }));
+
+    await waitForMessage(host, 'round_winner', 5000);
+    const secondRound = await waitForMessage(host, 'round_start', 5000);
+    console.log('DEBUG second deck', secondRound.payload.deckRemaining, 'same message?', firstRound === secondRound, 'round', secondRound.payload.roundNumber);
+    if (secondRound.payload.deckRemaining !== expectedRemaining - 1) {
+      throw new Error(`Expected ${expectedRemaining - 1} after round, got ${secondRound.payload.deckRemaining}`);
+    }
+
+    cleanup(host, guest);
+  });
 }
 
 // ============================================
@@ -459,8 +574,11 @@ async function runMatchTests() {
 
     // Wait for penalty
     const penalty = await waitForMessage(host, 'penalty', 2000);
-    if (!penalty.payload.until) {
-      throw new Error('Should receive penalty until timestamp');
+    if (!penalty.payload.durationMs || !penalty.payload.serverTimestamp) {
+      throw new Error('Should receive penalty with durationMs and serverTimestamp (clock-skew safe)');
+    }
+    if (penalty.payload.durationMs !== 3000) {
+      throw new Error(`Penalty duration should be 3000ms, got ${penalty.payload.durationMs}`);
     }
 
     cleanup(host, guest);
@@ -487,6 +605,116 @@ async function runLifecycleTests() {
     if (!leftMsg.payload.playerId) throw new Error('Should receive playerId');
 
     cleanup(host);
+  });
+
+  await test('Reconnecting preserves playerId', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    const guestId = guest.playerId;
+    guest.ws.terminate();
+    await waitForMessage(host, 'player_disconnected', 5000);
+
+    const guestReconnected = await createPlayer(roomCode, 'Guest', { reconnectId: guestId });
+    if (guestReconnected.playerId !== guestId) {
+      throw new Error('PlayerId should remain the same after reconnecting');
+    }
+
+    cleanup(host, guestReconnected);
+  });
+
+  await test('Message-based reconnection works (simulates React hook)', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+    const guestId = guest.playerId;
+
+    // Guest disconnects
+    guest.ws.close();
+    await sleep(100);
+
+    // Guest reconnects WITHOUT ?reconnectId in URL (what React hook does)
+    // and sends reconnect message instead
+    const guestWs = new WebSocket(`ws://${PARTYKIT_HOST}/party/${roomCode}`);
+
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        guestWs.close();
+        reject(new Error('Reconnect timeout'));
+      }, 5000);
+
+      guestWs.on('open', () => {
+        // Send reconnect message (what React hook does)
+        guestWs.send(JSON.stringify({
+          type: 'reconnect',
+          payload: { playerId: guestId }
+        }));
+      });
+
+      guestWs.on('message', (data) => {
+        const msg = JSON.parse(data.toString());
+        if (msg.type === 'room_state') {
+          clearTimeout(timeout);
+          const me = msg.payload.players.find(p => p.isYou);
+          if (me?.id !== guestId) {
+            reject(new Error(`Expected playerId ${guestId}, got ${me?.id}`));
+          } else {
+            resolve();
+          }
+        } else if (msg.type === 'error') {
+          clearTimeout(timeout);
+          reject(new Error(msg.payload?.message || 'Reconnect rejected'));
+        }
+      });
+
+      guestWs.on('error', (err) => {
+        clearTimeout(timeout);
+        reject(err);
+      });
+    });
+
+    // Cleanup
+    guestWs.close();
+    host.ws.close();
+  });
+
+  await test('Clients recover when countdown is cancelled (player leaves)', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Host starts game with targetPlayers=2
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', targetPlayers: 2 } }
+    }));
+
+    // Wait for countdown to start
+    const firstCountdown = await waitForMessage(host, 'countdown', 3000);
+    if (firstCountdown.payload.seconds <= 0) {
+      throw new Error('Expected countdown to start with positive seconds');
+    }
+
+    // Guest leaves mid-countdown
+    guest.ws.close();
+
+    // Host should receive countdown=-1 (cancellation signal)
+    const cancelled = await waitForMessage(host, 'countdown', 3000);
+    if (cancelled.payload.seconds !== -1) {
+      throw new Error(`Expected countdown cancellation (seconds=-1), got ${cancelled.payload.seconds}`);
+    }
+
+    // Host should receive fresh room_state with phase=waiting and roomExpiresAt set
+    const newState = await waitForMessage(host, 'room_state', 3000);
+    if (newState.payload.phase !== 'waiting') {
+      throw new Error(`Expected phase=waiting after cancellation, got ${newState.payload.phase}`);
+    }
+    if (!newState.payload.roomExpiresAt) {
+      throw new Error('Expected roomExpiresAt to be set after cancellation');
+    }
+
+    host.ws.close();
   });
 
   await test('Ping/pong works for latency', async () => {

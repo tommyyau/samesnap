@@ -1289,13 +1289,33 @@ async function runMultiPlayerTests() {
   });
 }
 
+const GROUPS = {
+  gameflow: [
+    runFullGameTests,
+    runRoundTransitionTests,
+    runNotificationTests,
+  ],
+  arbitration: [runArbitrationTests],
+  lifecycle: [
+    runErrorHandlingTests,
+    runHostTransferTests,
+    runDisconnectTests,
+    runKickTests,
+  ],
+  scores: [
+    runScoreTests,
+    runMultiPlayerTests,
+  ],
+};
+
 // ============================================
 // MAIN TEST RUNNER
 // ============================================
-async function runAllTests() {
+async function runAllTests(groupsToRun) {
   console.log('='.repeat(70));
   console.log('🧪 SAMESNAP COMPREHENSIVE MULTIPLAYER TEST SUITE');
   console.log(`📡 PartyKit Server: ${PARTYKIT_HOST}`);
+  console.log(`📦 Groups: ${groupsToRun.join(', ')}`);
   console.log('='.repeat(70));
 
   // Check if server is running
@@ -1311,17 +1331,18 @@ async function runAllTests() {
     process.exit(1);
   }
 
-  // Run all test suites
-  await runFullGameTests();
-  await runRoundTransitionTests();
-  await runNotificationTests();
-  await runArbitrationTests();
-  await runErrorHandlingTests();
-  await runHostTransferTests();
-  await runDisconnectTests();
-  await runKickTests();
-  await runScoreTests();
-  await runMultiPlayerTests();
+  const startTime = Date.now();
+
+  for (const group of groupsToRun) {
+    const runners = GROUPS[group];
+    if (!runners) continue;
+    console.log(`\n--- Running group: ${group.toUpperCase()} ---`);
+    for (const runner of runners) {
+      await runner();
+    }
+  }
+
+  const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
   // Summary
   console.log('\n' + '='.repeat(70));
@@ -1330,6 +1351,7 @@ async function runAllTests() {
   console.log(`✅ Passed: ${testResults.passed}`);
   console.log(`❌ Failed: ${testResults.failed}`);
   console.log(`📝 Total:  ${testResults.passed + testResults.failed}`);
+  console.log(`⏱️  Duration: ${duration}s`);
   console.log('='.repeat(70));
 
   if (testResults.failed > 0) {
@@ -1341,13 +1363,27 @@ async function runAllTests() {
     console.log('\n');
     process.exit(1);
   } else {
-    console.log('\n✅ ALL COMPREHENSIVE TESTS PASSED!\n');
+    console.log('\n✅ ALL SELECTED COMPREHENSIVE TESTS PASSED!\n');
     console.log('The multiplayer system is ready for manual testing.\n');
     process.exit(0);
   }
 }
 
-runAllTests().catch(err => {
+const cliArg = process.argv[2];
+let selectedGroups;
+if (cliArg && cliArg !== 'all') {
+  selectedGroups = cliArg.split(',').map(s => s.trim()).filter(Boolean);
+  const unknown = selectedGroups.filter(g => !GROUPS[g]);
+  if (unknown.length > 0) {
+    console.error(`Unknown group(s): ${unknown.join(', ')}`);
+    console.log(`Available groups: ${Object.keys(GROUPS).join(', ')}`);
+    process.exit(1);
+  }
+} else {
+  selectedGroups = Object.keys(GROUPS);
+}
+
+runAllTests(selectedGroups).catch(err => {
   console.error('Test runner error:', err);
   process.exit(1);
 });

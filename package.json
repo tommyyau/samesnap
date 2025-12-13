@@ -5,19 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:party": "partykit dev",
+    "dev:party": "partykit dev --disable-request-cf-fetch",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:party\"",
     "build": "vite build",
     "preview": "vite preview",
     "deploy:party": "partykit deploy",
-    "test": "npm run test:logic && npm run test:multiplayer && npm run test:hook",
+    "test": "node scripts/run-tests.mjs quick",
     "test:logic": "node test-game-logic.mjs",
     "test:multiplayer": "node test-multiplayer.mjs",
     "test:hook": "node test-hook-state.mjs",
     "test:ui": "node test-react-integration.mjs",
-    "test:comprehensive": "node test-multiplayer-comprehensive.mjs",
+    "test:comprehensive": "node scripts/run-tests.mjs comprehensive",
     "test:stress": "node test-multiplayer-stress.mjs",
-    "test:all": "npm run test:logic && npm run test:multiplayer && npm run test:hook && npm run test:stress"
+    "test:all": "node scripts/run-tests.mjs all",
+    "test:logged": "node scripts/run-tests.mjs",
+    "test:quick": "node scripts/run-tests.mjs quick"
   },
   "dependencies": {
     "lucide-react": "^0.560.0",

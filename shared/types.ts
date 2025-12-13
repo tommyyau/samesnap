@@ -40,6 +40,7 @@ export enum PlayerStatus {
 
 export interface ServerPlayer {
   id: string;
+  connectionId: string;
   name: string;
   status: PlayerStatus;
   score: number;
@@ -85,7 +86,8 @@ export interface ClientRoomState {
   roundMatchedSymbolId: number | null;
   roundNumber: number;
   countdown?: number;
-  penaltyUntil?: number;
+  penaltyUntil?: number;      // Client-side computed: when penalty ends (local clock)
+  penaltyRemainingMs?: number; // Server-sent: remaining penalty duration in ms (clock-skew safe)
   roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
   targetPlayers?: number;     // How many players needed to start
 }

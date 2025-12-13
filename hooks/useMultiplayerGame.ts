@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import usePartySocket from 'partysocket/react';
 import { ClientRoomState, RoomPhase, MultiplayerGameConfig } from '../shared/types';
 import { ClientMessage, ServerMessage } from '../shared/protocol';
@@ -27,17 +27,73 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   const hasJoined = useRef(false);
   // Store countdown value if it arrives before room_state
   const pendingCountdown = useRef<number | null>(null);
+  const storageKey = useMemo(() => `samesnap-player-${roomCode}`, [roomCode]);
+
+  // Read the initial playerId from localStorage for reconnection
+  const initialPlayerId = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      return window.localStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  }, [storageKey]);
+  const playerIdRef = useRef<string | null>(initialPlayerId);
+
+  const persistPlayerId = useCallback((value: string | null) => {
+    if (typeof window === 'undefined') return;
+    playerIdRef.current = value;
+    try {
+      if (value) {
+        window.localStorage.setItem(storageKey, value);
+      } else {
+        window.localStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }, [storageKey]);
+  const clearStoredPlayerId = useCallback(() => {
+    persistPlayerId(null);
+  }, [persistPlayerId]);
+  const joinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const host = process.env.PARTYKIT_HOST || 'localhost:1999';
+  // roomPath is stable - just the room code. Reconnection is handled via message protocol,
+  // not URL params, so mid-session reconnects work correctly.
+  const roomPath = roomCode;
 
   const socket = usePartySocket({
     host,
-    room: roomCode,
+    room: roomPath,
     onOpen: () => {
       setIsConnected(true);
-      if (!hasJoined.current) {
+      const sendJoin = () => {
+        if (hasJoined.current) return;
         hasJoined.current = true;
         socket.send(JSON.stringify({ type: 'join', payload: { playerName } } as ClientMessage));
+      };
+      const sendReconnect = () => {
+        // Send reconnect message with stored player ID
+        socket.send(JSON.stringify({ type: 'reconnect', payload: { playerId: playerIdRef.current! } } as ClientMessage));
+      };
+
+      if (!playerIdRef.current) {
+        // No stored ID - this is a new player, send join immediately
+        sendJoin();
+      } else {
+        // We have a stored ID - try to reconnect first
+        sendReconnect();
+        // Set a timeout to fall back to join if reconnect doesn't work
+        // (e.g., if the session expired server-side)
+        if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
+        joinTimeoutRef.current = window.setTimeout(() => {
+          if (!hasJoined.current) {
+            // Reconnect didn't work - clear the stale ID and join fresh
+            clearStoredPlayerId();
+            sendJoin();
+          }
+        }, 2000);
       }
       pingInterval.current = setInterval(() => {
         socket.send(JSON.stringify({ type: 'ping', payload: { timestamp: Date.now() } } as ClientMessage));
@@ -46,6 +102,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     onClose: () => {
       setIsConnected(false);
       if (pingInterval.current) clearInterval(pingInterval.current);
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current);
+        joinTimeoutRef.current = null;
+      }
+      hasJoined.current = false;
     },
     onMessage: (event) => {
       const message: ServerMessage = JSON.parse(event.data);
@@ -62,25 +123,43 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
 
   const handleServerMessage = useCallback((message: ServerMessage) => {
     switch (message.type) {
-      case 'room_state':
+      case 'room_state': {
+        if (joinTimeoutRef.current) {
+          clearTimeout(joinTimeoutRef.current);
+          joinTimeoutRef.current = null;
+        }
+        hasJoined.current = true;
         setHasReceivedRoomState(true);
+        // Convert server's penaltyRemainingMs to client-local penaltyUntil (clock-skew safe)
+        const clientPenaltyUntil = message.payload.penaltyRemainingMs
+          ? Date.now() + message.payload.penaltyRemainingMs
+          : undefined;
+        const stateWithClientPenalty = {
+          ...message.payload,
+          penaltyUntil: clientPenaltyUntil,
+        };
         // Apply pending countdown if it arrived before room_state
         if (pendingCountdown.current !== null) {
           setRoomState({
-            ...message.payload,
+            ...stateWithClientPenalty,
             phase: RoomPhase.COUNTDOWN,
             countdown: pendingCountdown.current,
           });
           pendingCountdown.current = null;
         } else {
-          setRoomState(message.payload);
+          setRoomState(stateWithClientPenalty);
         }
-        // Update host status
+        // Update host status and persist player ID for future reconnects
         const me = message.payload.players.find(p => p.isYou);
         if (me) {
+          // Persist ID to localStorage for future reconnects (does NOT change roomPath mid-session)
+          if (me.id && me.id !== playerIdRef.current) {
+            persistPlayerId(me.id);
+          }
           setIsHost(me.isHost);
         }
         break;
+      }
 
       case 'you_are_host':
         setIsHost(true);
@@ -95,19 +174,24 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'player_left': {
-        // Check if it's us being removed (kicked) - do this before setState to avoid setState-in-setState
-        const wasKicked = roomState?.players.find(p => p.id === message.payload.playerId)?.isYou;
+        // Check if it's us being removed (kicked) inside the updater where we have current state
+        let wasKicked = false;
         setRoomState(prev => {
           if (!prev) return null;
+          const kickedPlayer = prev.players.find(p => p.id === message.payload.playerId);
+          wasKicked = kickedPlayer?.isYou ?? false;
           return {
             ...prev,
             players: prev.players.filter(p => p.id !== message.payload.playerId)
           };
         });
-        // Call onKicked callback outside of setState to avoid React errors
-        if (wasKicked) {
-          setTimeout(() => onKicked?.(), 0);
-        }
+        // Use setTimeout to ensure setState has completed before checking wasKicked
+        setTimeout(() => {
+          if (wasKicked) {
+            clearStoredPlayerId();
+            onKicked?.();
+          }
+        }, 0);
         break;
       }
 
@@ -128,6 +212,22 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           )
         } : null);
         break;
+      case 'host_changed': {
+        let currentPlayerIsHost = false;
+        setRoomState(prev => {
+          if (!prev) return null;
+          const players = prev.players.map(p => {
+            const updated = { ...p, isHost: p.id === message.payload.playerId };
+            if (updated.isYou && updated.isHost) {
+              currentPlayerIsHost = true;
+            }
+            return updated;
+          });
+          return { ...prev, players };
+        });
+        setIsHost(currentPlayerIsHost);
+        break;
+      }
 
       case 'countdown':
         setRoomState(prev => {
@@ -136,6 +236,14 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           if (!prev) {
             pendingCountdown.current = message.payload.seconds;
             return null;
+          }
+          // Negative countdown means cancellation - return to waiting
+          if (message.payload.seconds < 0) {
+            return {
+              ...prev,
+              phase: RoomPhase.WAITING,
+              countdown: null
+            };
           }
           return {
             ...prev,
@@ -161,6 +269,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
             roundNumber: message.payload.roundNumber,
             roundWinnerId: null,
             roundMatchedSymbolId: null,
+            deckRemaining: message.payload.deckRemaining ?? prev.deckRemaining,
           };
         });
         break;
@@ -179,9 +288,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'penalty':
+        // Convert server duration to client-local timestamp (clock-skew safe)
         setRoomState(prev => prev ? {
           ...prev,
-          penaltyUntil: message.payload.until
+          penaltyUntil: Date.now() + message.payload.durationMs
         } : null);
         break;
 
@@ -217,6 +327,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         break;
 
       case 'room_expired':
+        clearStoredPlayerId();
         onRoomExpired?.(message.payload.reason);
         break;
 
@@ -224,7 +335,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         onError?.(message.payload);
         break;
     }
-  }, [roomCode, onError, onKicked, onRoomExpired]);
+  }, [onError, onKicked, onRoomExpired, clearStoredPlayerId, persistPlayerId]);
 
   const attemptMatch = useCallback((symbolId: number) => {
     sendMessage({
@@ -242,9 +353,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   }, [sendMessage]);
 
   const leaveRoom = useCallback(() => {
+    clearStoredPlayerId();
     sendMessage({ type: 'leave', payload: {} });
     socket.close();
-  }, [sendMessage, socket]);
+  }, [clearStoredPlayerId, sendMessage, socket]);
 
   const kickPlayer = useCallback((playerId: string) => {
     sendMessage({ type: 'kick_player', payload: { playerId } });
@@ -253,6 +365,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   useEffect(() => {
     return () => {
       if (pingInterval.current) clearInterval(pingInterval.current);
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current);
+        joinTimeoutRef.current = null;
+      }
     };
   }, []);
 

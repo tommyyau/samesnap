@@ -7,11 +7,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 npm install        # Install dependencies
 npm run dev        # Start Vite dev server on port 3000
+npm run dev:party  # Start PartyKit multiplayer server on port 1999
+npm run dev:all    # Start both servers concurrently
 npm run build      # Production build
 npm run preview    # Preview production build
 ```
 
 Note: Requires `GEMINI_API_KEY` in `.env.local` (referenced in vite.config.ts but not currently used in the game code).
+
+### PartyKit Local Development
+
+The `dev:party` script includes `--disable-request-cf-fetch` flag. This is a pragmatic local dev workaround - Miniflare (the local Cloudflare simulator) can crash when trying to simulate Cloudflare's `request.cf` object. This flag is:
+- **Only needed locally** - real Cloudflare provides `request.cf` natively
+- **Not required for production** - will be resolved when deployed to Cloudflare
+- **Not relevant to this app** - we don't use any CF-specific request data (geo-location, etc.)
 
 ## Architecture
 

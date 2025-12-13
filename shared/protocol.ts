@@ -6,6 +6,7 @@ import { CardData, ClientRoomState, MultiplayerGameConfig, ClientPlayer } from '
 
 export type ClientMessage =
   | { type: 'join'; payload: { playerName: string } }
+  | { type: 'reconnect'; payload: { playerId: string } }  // Reconnect with known player ID
   | { type: 'set_config'; payload: { config: MultiplayerGameConfig } }  // Host sets room config
   | { type: 'start_game'; payload: { config: MultiplayerGameConfig } }
   | { type: 'match_attempt'; payload: { symbolId: number; clientTimestamp: number } }
@@ -25,12 +26,13 @@ export type ServerMessage =
   | { type: 'player_reconnected'; payload: { playerId: string } }
   | { type: 'config_updated'; payload: { config: MultiplayerGameConfig } }  // Config changed by host
   | { type: 'countdown'; payload: { seconds: number } }
-  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; roundNumber: number } }
+  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; roundNumber: number; deckRemaining: number } }
   | { type: 'round_winner'; payload: { winnerId: string; winnerName: string; matchedSymbolId: number } }
   | { type: 'game_over'; payload: { finalScores: { playerId: string; name: string; score: number }[] } }
   | { type: 'match_result'; payload: { success: boolean; reason?: string } }
-  | { type: 'penalty'; payload: { until: number; reason: string } }
+  | { type: 'penalty'; payload: { serverTimestamp: number; durationMs: number; reason: string } }
   | { type: 'room_expired'; payload: { reason: string } }  // Room timed out
+  | { type: 'host_changed'; payload: { playerId: string } }
   | { type: 'error'; payload: { code: string; message: string } }
   | { type: 'pong'; payload: { serverTimestamp: number; clientTimestamp: number } }
   | { type: 'you_are_host'; payload: Record<string, never> };
