@@ -1014,7 +1014,7 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private getCardById(cardId: number | null): CardData | null {
-    if (cardId === null || cardId < 0 || cardId >= this.fullDeck.length) return null;
+    if (cardId === null || cardId < 0) return null;
     return this.fullDeck.find(c => c.id === cardId) || null;
   }
 

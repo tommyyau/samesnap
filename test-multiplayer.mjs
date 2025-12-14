@@ -2194,7 +2194,7 @@ async function runGameDurationTests() {
     cleanup(host, guest);
   });
 
-  await test('Default game duration deals correct stacks (LONG = 50 cards)', async () => {
+  await test('Default game duration deals correct stacks (SHORT = 10 cards)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2206,10 +2206,10 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // Default is 50 cards: (50-1)/2 = 24 cards each
-    const expectedCardsPerPlayer = Math.floor((50 - 1) / 2);
+    // Default is 10 cards (SHORT): (10-1)/2 = 4 cards each
+    const expectedCardsPerPlayer = Math.floor((10 - 1) / 2);
     if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
-      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for default LONG game, got ${roundStart.payload.yourCardsRemaining}`);
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for default SHORT game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
