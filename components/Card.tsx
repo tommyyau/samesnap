@@ -1,6 +1,14 @@
 import React, { useMemo } from 'react';
 import { CardData, SymbolItem, CardDifficulty } from '../types';
 
+// Seeded random number generator - ensures same card always has same layout
+function seededRandom(seed: number): () => number {
+  return () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+}
+
 interface CardProps {
   card: CardData;
   size: number;
@@ -29,7 +37,9 @@ const Card: React.FC<CardProps> = ({
   // Precompute layout
   const symbolLayout = useMemo(() => {
     const numSymbols = card.symbols.length;
-    
+    // Create seeded random based on card ID for consistent layout
+    const random = seededRandom(card.id);
+
     if (layoutMode === CardDifficulty.EASY) {
       // ORDERLY LAYOUT: 1 in center, rest in a circle
       return card.symbols.map((symbol, index) => {
@@ -40,16 +50,16 @@ const Card: React.FC<CardProps> = ({
             x: 50,
             y: 50,
             scale: 1.4, // Slightly larger
-            rotation: Math.random() * 360
+            rotation: random() * 360
           };
         }
         // Surrounding symbols
         const angle = ((index - 1) / (numSymbols - 1)) * 2 * Math.PI;
-        const radius = 33; 
+        const radius = 33;
         const x = 50 + radius * Math.cos(angle);
         const y = 50 + radius * Math.sin(angle);
         const scale = 0.9;
-        const rotation = Math.random() * 360;
+        const rotation = random() * 360;
 
         return { symbol, x, y, scale, rotation };
       });
@@ -62,12 +72,12 @@ const Card: React.FC<CardProps> = ({
       // 1. Initialize with random positions and scales
       const items = card.symbols.map((symbol) => {
         // Scale variance: 0.85 to 1.25 (slightly smaller max to ensure fit)
-        const scale = 0.85 + Math.random() * 0.4; 
-        
+        const scale = 0.85 + random() * 0.4;
+
         // Initial random position: Start somewhat spread out (r=0-30) to avoid initial "singularity"
-        const angle = Math.random() * 2 * Math.PI;
-        const r = Math.random() * 30; 
-        
+        const angle = random() * 2 * Math.PI;
+        const r = random() * 30;
+
         return {
           symbol,
           scale,
@@ -75,8 +85,8 @@ const Card: React.FC<CardProps> = ({
           y: 50 + r * Math.sin(angle),
           // Estimated collision radius in % (25% is base size, so radius is ~12.5% * scale)
           // We add a small buffer for visual spacing
-          radius: (12.5 * scale) * 0.9, 
-          rotation: Math.random() * 360,
+          radius: (12.5 * scale) * 0.9,
+          rotation: random() * 360,
           vx: 0,
           vy: 0
         };
@@ -105,9 +115,9 @@ const Card: React.FC<CardProps> = ({
             if (dist < minDist) {
               // Overlap detected!
               if (dist === 0) {
-                // Handle exact overlap
-                dx = Math.random() - 0.5;
-                dy = Math.random() - 0.5;
+                // Handle exact overlap - use deterministic offset based on indices
+                dx = (a - b) * 0.1 || 0.1;
+                dy = (a + b) * 0.1 || 0.1;
                 dist = Math.sqrt(dx*dx + dy*dy);
               }
               
