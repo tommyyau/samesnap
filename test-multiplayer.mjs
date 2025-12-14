@@ -1,6 +1,15 @@
 /**
- * QA Test Suite - Multiplayer Integration Tests
- * Tests PartyKit server room management, game flow, and WebSocket communication
+ * QA Test Suite - Multiplayer Edge Cases & Regression Tests
+ *
+ * Focus areas:
+ * - Room management edge cases (timeout, limits, duplicate names)
+ * - Reconnection mechanics and race conditions
+ * - Ghost player regression tests
+ * - Last player standing scenarios
+ * - GAME_OVER phase behavior (play_again, rejoin window)
+ * - Game duration configuration
+ *
+ * For happy-path full game playthroughs, see test-multiplayer-comprehensive.mjs
  *
  * REQUIRES: PartyKit server running on localhost:1999
  * Start with: npx partykit dev
@@ -156,6 +165,36 @@ function waitForRoomState(player, condition, timeout = 5000) {
             clearTimeout(timer);
             player.ws.removeListener('message', handler);
             resolve(msg.state);
+          }
+        }
+      } catch (e) {}
+    });
+  });
+}
+
+function waitForAnyMessage(player, types, timeout = 5000) {
+  return new Promise((resolve, reject) => {
+    const existingIndex = player.messages.findIndex(m => types.includes(m.type));
+    if (existingIndex !== -1) {
+      const existing = player.messages.splice(existingIndex, 1)[0];
+      resolve(existing);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout waiting for message types: ${types.join(', ')}`));
+    }, timeout);
+
+    player.ws.on('message', function handler(data) {
+      try {
+        const msg = JSON.parse(data.toString());
+        player.messages.push(msg);
+        if (types.includes(msg.type)) {
+          clearTimeout(timer);
+          player.ws.removeListener('message', handler);
+          const idx = player.messages.findIndex(m => types.includes(m.type));
+          if (idx !== -1) {
+            resolve(player.messages.splice(idx, 1)[0]);
           }
         }
       } catch (e) {}
@@ -409,6 +448,37 @@ async function runConfigTests() {
 
     cleanup(host);
   });
+
+  await test('Host can update config during GAME_OVER before rematch', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    await waitForMessage(host, 'round_start', 10000);
+
+    // Force last-player-standing game_over
+    guest.ws.send(JSON.stringify({ type: 'leave' }));
+    guest.ws.close();
+    await waitForMessage(host, 'player_left', 3000);
+    await waitForMessage(host, 'game_over', 3000);
+
+    host.ws.send(JSON.stringify({
+      type: 'set_config',
+      payload: { config: { cardDifficulty: 'HARD', gameDuration: 25 } }
+    }));
+
+    const updated = await waitForMessage(host, 'config_updated', 2000);
+    if (updated.payload.config.cardDifficulty !== 'HARD' || updated.payload.config.gameDuration !== 25) {
+      throw new Error('Config update during GAME_OVER did not apply new values');
+    }
+
+    host.ws.close();
+  });
 }
 
 // ============================================
@@ -416,35 +486,6 @@ async function runConfigTests() {
 // ============================================
 async function runGameFlowTests() {
   console.log('\n🎮 GAME FLOW TESTS\n');
-
-  await test('Game auto-starts when target players reached', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-
-    // Set target to 2 players
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
-    }));
-
-    await new Promise(r => setTimeout(r, 100));
-
-    // Second player joins - should trigger auto-start
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Wait for countdown
-    try {
-      const countdown = await waitForMessage(host, 'countdown', 3000);
-      // Success - game is starting
-    } catch (e) {
-      // Check if already in playing phase
-      if (host.roomState?.phase !== 'countdown' && host.roomState?.phase !== 'playing') {
-        throw new Error('Game should auto-start with countdown');
-      }
-    }
-
-    cleanup(host, guest);
-  });
 
   await test('Host can manually start game', async () => {
     const roomCode = generateRoomCode();
@@ -467,33 +508,6 @@ async function runGameFlowTests() {
     const roundStart = await waitForMessage(host, 'round_start', 10000);
     if (!roundStart.payload.centerCard || !roundStart.payload.yourCard) {
       throw new Error('round_start should have cards');
-    }
-
-    cleanup(host, guest);
-  });
-
-  await test('Host can manually start game', async () => {
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Set target high so it doesn't auto-start
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'MEDIUM' } }
-    }));
-
-    await new Promise(r => setTimeout(r, 200));
-
-    // Manually start
-    host.ws.send(JSON.stringify({
-      type: 'start_game',
-      payload: { config: { cardDifficulty: 'MEDIUM' } }
-    }));
-
-    const countdown = await waitForMessage(host, 'countdown', 3000);
-    if (typeof countdown.payload.seconds !== 'number') {
-      throw new Error('Should receive countdown seconds');
     }
 
     cleanup(host, guest);
@@ -787,6 +801,11 @@ async function runLifecycleTests() {
     host.ws.close();
   });
 
+  // NOTE: "Play again resets lobby when two players opt in" test removed
+  // This functionality is already covered by:
+  // - "Two players can rejoin within window and start new game"
+  // - "Two players sending play_again resets room immediately"
+
   await test('Ping/pong works for latency', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
@@ -1001,56 +1020,8 @@ async function runLifecycleTests() {
   // in grace period were counted as "present" for game start
   // ============================================
 
-  await test('Auto-start does NOT trigger when guest disconnects (ghost player fix)', async () => {
-    // Regression test: disconnected players in grace period shouldn't count for auto-start
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Set target to 2 players - normally this would auto-start
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
-    }));
-
-    // Wait for countdown to start (since we have 2 players)
-    const firstCountdown = await waitForMessage(host, 'countdown', 3000);
-    if (firstCountdown.payload.seconds < 0) {
-      throw new Error('Countdown should have started with 2 players');
-    }
-
-    // Guest disconnects mid-countdown (within grace period)
-    guest.ws.close();
-    host.messages = [];
-
-    // Should receive countdown cancellation
-    const cancelledCountdown = await waitForMessage(host, 'countdown', 3000);
-    if (cancelledCountdown.payload.seconds !== -1) {
-      throw new Error(`Expected countdown cancellation (seconds=-1), got ${cancelledCountdown.payload.seconds}`);
-    }
-
-    // Now try to re-trigger auto-start by setting config again - should NOT start
-    // because the guest is still in grace period but disconnected
-    await sleep(200);
-    host.messages = [];
-
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
-    }));
-
-    await waitForMessage(host, 'config_updated', 2000);
-
-    // Wait a bit and check no countdown started
-    await sleep(500);
-
-    const badCountdown = host.messages.find(m => m.type === 'countdown' && m.payload?.seconds > 0);
-    if (badCountdown) {
-      throw new Error('Auto-start should NOT trigger when only 1 player is connected (ghost player bug!)');
-    }
-
-    cleanup(host);
-  });
+  // NOTE: 'Auto-start does NOT trigger when guest disconnects' test was removed
+  // because auto-start feature no longer exists - games now require manual start via start_game
 
   await test('Manual start fails when guest disconnects during grace period (ghost player fix)', async () => {
     // Regression test: host shouldn't be able to manually start with ghost player
@@ -1094,45 +1065,8 @@ async function runLifecycleTests() {
     cleanup(host);
   });
 
-  await test('Countdown completion fails when guest disconnects during countdown (ghost player fix)', async () => {
-    // Regression test: countdown should fail to start game if player disconnects during countdown
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Set target to 2, countdown starts
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
-    }));
-
-    // Wait for countdown to start
-    await waitForMessage(host, 'countdown', 3000);
-
-    // Guest disconnects during countdown
-    guest.ws.close();
-
-    // Should receive cancellation
-    const cancelMsg = await waitForMessage(host, 'countdown', 3000);
-    if (cancelMsg.payload.seconds !== -1) {
-      throw new Error(`Expected countdown cancellation, got seconds=${cancelMsg.payload.seconds}`);
-    }
-
-    // Should receive room_state with phase=waiting
-    const roomState = await waitForMessage(host, 'room_state', 2000);
-    if (roomState.payload.phase !== 'waiting') {
-      throw new Error(`Expected phase=waiting, got ${roomState.payload.phase}`);
-    }
-
-    // Should NOT receive round_start (game should not have started)
-    await sleep(1000);
-    const roundStart = host.messages.find(m => m.type === 'round_start');
-    if (roundStart) {
-      throw new Error('Game should NOT start when player disconnects during countdown (ghost player bug!)');
-    }
-
-    cleanup(host);
-  });
+  // NOTE: 'Countdown completion fails when guest disconnects during countdown' test was removed
+  // because auto-start feature no longer exists - games now require manual start via start_game
 
   await test('Delayed server response does not create duplicate (client-side race)', async () => {
     // This tests the scenario where:
@@ -1217,9 +1151,9 @@ async function runLastPlayerStandingTests() {
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
 
-    // Start game with low target to auto-start
+    // Start game manually
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1260,7 +1194,7 @@ async function runLastPlayerStandingTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1323,7 +1257,7 @@ async function runLastPlayerStandingTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1357,7 +1291,7 @@ async function runLastPlayerStandingTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1432,7 +1366,7 @@ async function runLastPlayerStandingTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1456,18 +1390,14 @@ async function runLastPlayerStandingTests() {
       throw new Error(`Expected reason=last_player_standing, got ${gameOver.payload.reason}`);
     }
 
-    // Host should receive bonus
-    if (gameOver.payload.bonusAwarded !== deckRemaining) {
-      throw new Error(`Expected bonusAwarded=${deckRemaining}, got ${gameOver.payload.bonusAwarded}`);
+    // Host should be the winner in final standings
+    const hostStanding = gameOver.payload.finalStandings.find(s => s.playerId === host.playerId);
+    if (!hostStanding) {
+      throw new Error('Host should be in final standings');
     }
-
-    // Host should be the winner in final scores
-    const hostScore = gameOver.payload.finalScores.find(s => s.playerId === host.playerId);
-    if (!hostScore) {
-      throw new Error('Host should be in final scores');
-    }
-    if (hostScore.score !== deckRemaining) {
-      throw new Error(`Host score should be ${deckRemaining}, got ${hostScore.score}`);
+    // Host should be the winner (first in standings)
+    if (gameOver.payload.finalStandings[0].playerId !== host.playerId) {
+      throw new Error('Host should be the winner (first in standings)');
     }
 
     cleanup(host);
@@ -1501,16 +1431,13 @@ async function runLastPlayerStandingTests() {
     }
 
     // Guest should be the sole winner
-    if (gameOver.payload.finalScores.length !== 1) {
-      throw new Error(`Expected 1 player in final scores, got ${gameOver.payload.finalScores.length}`);
+    if (gameOver.payload.finalStandings.length !== 1) {
+      throw new Error(`Expected 1 player in final standings, got ${gameOver.payload.finalStandings.length}`);
     }
 
-    const guestScore = gameOver.payload.finalScores[0];
-    if (guestScore.playerId !== guest.playerId) {
+    const guestStanding = gameOver.payload.finalStandings[0];
+    if (guestStanding.playerId !== guest.playerId) {
       throw new Error('Guest should be the winner');
-    }
-    if (guestScore.score !== deckRemaining) {
-      throw new Error(`Guest score should be ${deckRemaining}, got ${guestScore.score}`);
     }
 
     cleanup(guest);
@@ -1524,7 +1451,7 @@ async function runLastPlayerStandingTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1545,29 +1472,6 @@ async function runLastPlayerStandingTests() {
 
     cleanup(host);
   });
-
-  await test('Normal game over has reason=deck_exhausted', async () => {
-    // This is a quick sanity check that normal endings work
-    // We can't easily run a full game, but we can verify the field exists
-    const roomCode = generateRoomCode();
-    const host = await createPlayer(roomCode, 'Host');
-    const guest = await createPlayer(roomCode, 'Guest');
-
-    // Start game
-    host.ws.send(JSON.stringify({
-      type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
-    }));
-
-    // Just verify we can start a game (full game test is too long)
-    const roundStart = await waitForMessage(host, 'round_start', 10000);
-    if (!roundStart.payload.centerCard) {
-      throw new Error('Should receive cards on round_start');
-    }
-
-    // We won't play the full game, but we verified the setup works
-    cleanup(host, guest);
-  });
 }
 
 // ============================================
@@ -1583,7 +1487,7 @@ async function runRejoinTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1614,7 +1518,7 @@ async function runRejoinTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1649,7 +1553,7 @@ async function runRejoinTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1683,7 +1587,7 @@ async function runRejoinTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -1791,7 +1695,7 @@ async function runRejoinTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -2005,7 +1909,7 @@ async function runGameOverExitTests() {
 
     // Start game
     host.ws.send(JSON.stringify({
-      type: 'set_config',
+      type: 'start_game',
       payload: { config: { cardDifficulty: 'EASY' } }
     }));
 
@@ -2313,6 +2217,257 @@ async function runGameDurationTests() {
 }
 
 // ============================================
+// TEST SUITE: Play Again Room Reset
+// ============================================
+async function runPlayAgainRoomResetTests() {
+  console.log('\n🔄 PLAY AGAIN ROOM RESET TESTS\n');
+
+  await test('Play again: both players click Play Again, room resets to WAITING phase', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game with SHORT duration (10 cards) for faster completion
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    // Get initial cards from round_start
+    const hostRoundStart = await waitForMessage(host, 'round_start', 10000);
+    await waitForMessage(guest, 'round_start', 10000);
+
+    let yourCard = hostRoundStart.payload.yourCard;
+    let centerCard = hostRoundStart.payload.centerCard;
+
+    // Play through game until game_over by having host win all rounds
+    let gameOver = false;
+    while (!gameOver) {
+      const match = findMatchingSymbol(yourCard, centerCard);
+      if (!match) throw new Error('No match found - card pair invalid');
+
+      host.ws.send(JSON.stringify({
+        type: 'match_attempt',
+        payload: { symbolId: match.id, clientTimestamp: Date.now() }
+      }));
+
+      const result = await waitForAnyMessage(host, ['round_winner', 'game_over'], 5000);
+      if (result.type === 'game_over') {
+        gameOver = true;
+        break;
+      }
+
+      // Wait for next round
+      try {
+        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        yourCard = nextRound.payload.yourCard;
+        centerCard = nextRound.payload.centerCard;
+      } catch (e) {
+        // Maybe game_over
+        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        if (over.type === 'game_over') gameOver = true;
+      }
+    }
+
+    // Also ensure guest received game_over
+    await waitForMessage(guest, 'game_over', 3000);
+
+    host.messages = [];
+    guest.messages = [];
+
+    // Both players send play_again
+    host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(host, 'play_again_ack', 3000);
+
+    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(guest, 'play_again_ack', 3000);
+
+    // Both should receive room_reset
+    const hostReset = await waitForMessage(host, 'room_reset', 3000);
+    const guestReset = await waitForMessage(guest, 'room_reset', 3000);
+
+    if (!hostReset || !guestReset) {
+      throw new Error('Both players should receive room_reset after both click Play Again');
+    }
+
+    // Both should receive room_state with phase: 'waiting'
+    const hostState = await waitForMessage(host, 'room_state', 3000);
+    const guestState = await waitForMessage(guest, 'room_state', 3000);
+
+    if (hostState.payload.phase !== 'waiting') {
+      throw new Error(`Host room_state phase should be 'waiting', got '${hostState.payload.phase}'`);
+    }
+    if (guestState.payload.phase !== 'waiting') {
+      throw new Error(`Guest room_state phase should be 'waiting', got '${guestState.payload.phase}'`);
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('Play again: room_state after reset shows both players', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game with SHORT duration
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    // Get initial cards from round_start
+    const hostRoundStart = await waitForMessage(host, 'round_start', 10000);
+    await waitForMessage(guest, 'round_start', 10000);
+
+    let yourCard = hostRoundStart.payload.yourCard;
+    let centerCard = hostRoundStart.payload.centerCard;
+
+    // Play through game until game_over by having host win all rounds
+    let gameOver = false;
+    while (!gameOver) {
+      const match = findMatchingSymbol(yourCard, centerCard);
+      if (!match) throw new Error('No match found - card pair invalid');
+
+      host.ws.send(JSON.stringify({
+        type: 'match_attempt',
+        payload: { symbolId: match.id, clientTimestamp: Date.now() }
+      }));
+
+      const result = await waitForAnyMessage(host, ['round_winner', 'game_over'], 5000);
+      if (result.type === 'game_over') {
+        gameOver = true;
+        break;
+      }
+
+      try {
+        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        yourCard = nextRound.payload.yourCard;
+        centerCard = nextRound.payload.centerCard;
+      } catch (e) {
+        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        if (over.type === 'game_over') gameOver = true;
+      }
+    }
+
+    await waitForMessage(guest, 'game_over', 3000);
+    host.messages = [];
+    guest.messages = [];
+
+    // Both send play_again
+    host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(host, 'play_again_ack', 3000);
+
+    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(guest, 'play_again_ack', 3000);
+
+    // Wait for room_reset and room_state
+    await waitForMessage(host, 'room_reset', 3000);
+    const roomState = await waitForMessage(host, 'room_state', 3000);
+
+    // Verify both players are in the room
+    if (roomState.payload.players.length !== 2) {
+      throw new Error(`Expected 2 players in reset room, got ${roomState.payload.players.length}`);
+    }
+
+    // Verify one is host
+    const hostPlayer = roomState.payload.players.find(p => p.isHost);
+    if (!hostPlayer) {
+      throw new Error('Should have a host after room reset');
+    }
+
+    cleanup(host, guest);
+  });
+
+  await test('Play again: can start new game after room reset', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start first game
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    // Get initial cards from round_start
+    const hostRoundStart = await waitForMessage(host, 'round_start', 10000);
+    await waitForMessage(guest, 'round_start', 10000);
+
+    let yourCard = hostRoundStart.payload.yourCard;
+    let centerCard = hostRoundStart.payload.centerCard;
+
+    // Play through game until game_over by having host win all rounds
+    let gameOver = false;
+    while (!gameOver) {
+      const match = findMatchingSymbol(yourCard, centerCard);
+      if (!match) throw new Error('No match found - card pair invalid');
+
+      host.ws.send(JSON.stringify({
+        type: 'match_attempt',
+        payload: { symbolId: match.id, clientTimestamp: Date.now() }
+      }));
+
+      const result = await waitForAnyMessage(host, ['round_winner', 'game_over'], 5000);
+      if (result.type === 'game_over') {
+        gameOver = true;
+        break;
+      }
+
+      try {
+        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        yourCard = nextRound.payload.yourCard;
+        centerCard = nextRound.payload.centerCard;
+      } catch (e) {
+        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        if (over.type === 'game_over') gameOver = true;
+      }
+    }
+
+    await waitForMessage(guest, 'game_over', 3000);
+    host.messages = [];
+    guest.messages = [];
+
+    // Both send play_again
+    host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(host, 'play_again_ack', 3000);
+
+    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(guest, 'play_again_ack', 3000);
+
+    // Wait for room_reset
+    await waitForMessage(host, 'room_reset', 3000);
+    await waitForMessage(host, 'room_state', 3000);
+
+    host.messages = [];
+    guest.messages = [];
+
+    // Start a new game
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+    }));
+
+    // Both should receive new round_start
+    const hostRound = await waitForMessage(host, 'round_start', 10000);
+    const guestRound = await waitForMessage(guest, 'round_start', 10000);
+
+    if (!hostRound.payload.yourCard || !hostRound.payload.centerCard) {
+      throw new Error('Host should have cards in new game');
+    }
+    if (!guestRound.payload.yourCard || !guestRound.payload.centerCard) {
+      throw new Error('Guest should have cards in new game');
+    }
+
+    // Verify round number is 1 (new game)
+    if (hostRound.payload.roundNumber !== 1) {
+      throw new Error(`New game should start at round 1, got ${hostRound.payload.roundNumber}`);
+    }
+
+    cleanup(host, guest);
+  });
+}
+
+// ============================================
 // MAIN TEST RUNNER
 // ============================================
 async function runAllTests() {
@@ -2343,6 +2498,7 @@ async function runAllTests() {
   await runRejoinTests();
   await runGameOverExitTests();
   await runGameDurationTests();
+  await runPlayAgainRoomResetTests();
 
   // Summary
   console.log('\n' + '='.repeat(60));

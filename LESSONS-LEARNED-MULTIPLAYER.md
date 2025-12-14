@@ -93,23 +93,23 @@ private handleMatchAttempt(playerId: string, symbolId: number) {
 
 ## Category 2: State Synchronization
 
-### Bug #4: Scores drifting between clients
+### Bug #4: Card counts drifting between clients
 
 **What happened:**
-- Client increments score locally on `round_winner`
-- Server also sends updated score in `game_over.finalScores`
-- If client misses a `round_winner` message → scores differ
+- Client tracks cards locally on `round_winner`
+- Server sends authoritative state in `game_over.finalStandings`
+- If client misses a `round_winner` message → card counts differ
 
-**The Fix:** Server is authoritative for final scores
+**The Fix:** Server is authoritative for final standings
 ```typescript
 case 'game_over':
-  // Don't trust local score - use server's authoritative finalScores
+  // Don't trust local card count - use server's authoritative finalStandings
   setRoomState(prev => ({
     ...prev,
     phase: 'GAME_OVER',
-    players: msg.finalScores.map(s => ({
+    players: msg.finalStandings.map(s => ({
       ...prev.players.find(p => p.id === s.playerId),
-      score: s.score  // Server's score is truth
+      cardsRemaining: s.cardsRemaining  // Server's count is truth
     }))
   }));
 ```
@@ -386,11 +386,11 @@ onMessage('countdown') {
 ### 2. Local state as source of truth
 ```typescript
 // BAD
-onRoundWinner() { localScore++; }  // Can drift from server
+onRoundWinner() { localCards--; }  // Can drift from server
 
 // GOOD
-onRoundWinner() { /* let server tell us new score */ }
-onGameOver() { scores = msg.finalScores; }  // Server is truth
+onRoundWinner() { /* let server tell us card count */ }
+onGameOver() { standings = msg.finalStandings; }  // Server is truth
 ```
 
 ### 3. Synchronous side effects in message handlers

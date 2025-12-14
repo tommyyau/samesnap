@@ -419,26 +419,6 @@ async function testGameplay(browser) {
 }
 
 // ============================================
-// TEST SUITE 6: GAME OVER FLOW
-// ============================================
-async function testGameOver(browser) {
-  console.log('\n🏆 GAME OVER TESTS\n');
-
-  // This is harder to test because we'd need to play through many rounds
-  // For now, just verify the game over screen exists in the component
-
-  await test('Game over screen structure exists in code', async () => {
-    // This is a static check - we verified the component has game over handling
-    // In MultiplayerGame.tsx lines 122-153
-    console.log('     (Verified in code review - game over screen renders when phase === GAME_OVER)');
-  });
-
-  await test('Back to Lobby button exists in game over screen', async () => {
-    console.log('     (Verified in code review - line 147-149 has Back to Lobby button)');
-  });
-}
-
-// ============================================
 // MAIN TEST RUNNER
 // ============================================
 async function runAllTests() {
@@ -482,7 +462,6 @@ async function runAllTests() {
     await testJoinRoom(browser);
     await testGameStartAndCountdown(browser);
     await testGameplay(browser);
-    await testGameOver(browser);
   } catch (e) {
     console.log(`\n❌ Test suite error: ${e.message}`);
   }

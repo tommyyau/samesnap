@@ -1,6 +1,15 @@
 /**
- * COMPREHENSIVE Multiplayer Test Suite
- * Tests full game flows, edge cases, and all critical paths
+ * Comprehensive Multiplayer Tests - Happy Path & Full Flows
+ *
+ * Focus areas:
+ * - Full game playthroughs (play until deck exhausted)
+ * - Round transitions and card mechanics
+ * - Notification broadcasts to all players
+ * - Simultaneous match arbitration
+ * - Score tracking verification
+ * - Multi-player games (3-4 players)
+ *
+ * For edge cases, reconnection, and regression tests, see test-multiplayer.mjs
  *
  * REQUIRES: PartyKit server running on localhost:1999
  * Start with: npx partykit dev
@@ -75,7 +84,7 @@ function createPlayer(roomCode, playerName, options = {}) {
           if (you) {
             player.playerId = you.id;
             player.isHost = you.isHost;
-            player.score = you.score;
+            // Note: score is tracked locally based on round_winner messages, not from room_state
           }
           if (msg.payload.yourCard) player.yourCard = msg.payload.yourCard;
           if (msg.payload.centerCard) player.centerCard = msg.payload.centerCard;
@@ -273,8 +282,8 @@ async function runFullGameTests() {
       if (result.type === 'game_over') {
         gameOver = true;
         // Verify final scores exist
-        if (!result.payload.finalScores || result.payload.finalScores.length !== 2) {
-          throw new Error('game_over missing finalScores');
+        if (!result.payload.finalStandings || result.payload.finalStandings.length !== 2) {
+          throw new Error('game_over missing finalStandings');
         }
         break;
       }
@@ -345,13 +354,13 @@ async function runFullGameTests() {
 
       if (result.type === 'game_over') {
         gameOver = true;
-        const scores = result.payload.finalScores;
-        const winner = scores[0]; // Should be sorted highest first
+        const standings = result.payload.finalStandings;
+        const winner = standings[0]; // Should be sorted by cardsRemaining ascending (winner has fewest)
 
-        // Verify sorting
-        for (let i = 1; i < scores.length; i++) {
-          if (scores[i].score > scores[i-1].score) {
-            throw new Error('finalScores not sorted by score descending');
+        // Verify sorting (ascending by cardsRemaining - winner has 0 or fewest cards)
+        for (let i = 1; i < standings.length; i++) {
+          if (standings[i].cardsRemaining < standings[i-1].cardsRemaining) {
+            throw new Error('finalStandings not sorted by cardsRemaining ascending');
           }
         }
         break;
@@ -628,9 +637,9 @@ async function runNotificationTests() {
       if (result.type === 'game_over') {
         gameOver = true;
 
-        // Verify all 3 players in finalScores
-        if (result.payload.finalScores.length !== 3) {
-          throw new Error(`Expected 3 players in finalScores, got ${result.payload.finalScores.length}`);
+        // Verify all 3 players in finalStandings
+        if (result.payload.finalStandings.length !== 3) {
+          throw new Error(`Expected 3 players in finalStandings, got ${result.payload.finalStandings.length}`);
         }
         break;
       }
@@ -647,8 +656,8 @@ async function runNotificationTests() {
     const p2Over = await waitForMessage(p2, 'game_over', 2000);
     const p3Over = await waitForMessage(p3, 'game_over', 2000);
 
-    if (p2Over.payload.finalScores.length !== 3 || p3Over.payload.finalScores.length !== 3) {
-      throw new Error('All players should receive full finalScores');
+    if (p2Over.payload.finalStandings.length !== 3 || p3Over.payload.finalStandings.length !== 3) {
+      throw new Error('All players should receive full finalStandings');
     }
 
     cleanup(p1, p2, p3);
@@ -1021,8 +1030,8 @@ async function runDisconnectTests() {
     await waitForMessage(host, 'player_left', 3000);
     const gameOver = await waitForMessage(host, 'game_over', 3000);
 
-    if (!gameOver.payload.finalScores) {
-      throw new Error('game_over should include finalScores');
+    if (!gameOver.payload.finalStandings) {
+      throw new Error('game_over should include finalStandings');
     }
 
     cleanup(host);
@@ -1178,14 +1187,24 @@ async function runScoreTests() {
       }
 
       if (result.type === 'game_over') {
-        const hostScore = result.payload.finalScores.find(s => s.playerId === host.playerId)?.score;
-        const guestScore = result.payload.finalScores.find(s => s.playerId === guest.playerId)?.score;
+        const hostStanding = result.payload.finalStandings.find(s => s.playerId === host.playerId);
+        const guestStanding = result.payload.finalStandings.find(s => s.playerId === guest.playerId);
 
-        if (hostScore !== hostWins) {
-          throw new Error(`Host score mismatch: final=${hostScore}, tracked=${hostWins}`);
+        if (!hostStanding) {
+          throw new Error('Host not found in finalStandings');
         }
-        if (guestScore !== guestWins) {
-          throw new Error(`Guest score mismatch: final=${guestScore}, tracked=${guestWins}`);
+        if (!guestStanding) {
+          throw new Error('Guest not found in finalStandings');
+        }
+        // Winner should have 0 cards remaining, loser should have more
+        if (hostStanding.cardsRemaining < 0 || guestStanding.cardsRemaining < 0) {
+          throw new Error('cardsRemaining should be non-negative');
+        }
+        // At least one player should have won (0 cards remaining) unless last_player_standing
+        const winnerId = result.payload.winnerId;
+        const winnerStanding = result.payload.finalStandings[0];
+        if (winnerStanding.playerId !== winnerId) {
+          throw new Error('Winner should be first in finalStandings');
         }
         break;
       }

@@ -138,7 +138,7 @@
 
 #### Finding 7: `game_over` handler doesn't preserve isYou flag correctly
 - **File:** `hooks/useMultiplayerGame.ts:276-293`
-- **Issue:** When building new players array from `finalScores`, if player not found in existing list, isYou defaults to `false`. This could happen if room_state was delayed.
+- **Issue:** When building new players array from `finalStandings`, if player not found in existing list, isYou defaults to `false`. This could happen if room_state was delayed.
 - **Impact:** After game over, player may not see "(You)" marker next to their name
 - **Verification:** Fallback at line 283-290 sets `isYou: false`
 - **Recommendation:** Store playerId separately and match, or trust server to always include isYou

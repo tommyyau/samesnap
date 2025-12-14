@@ -157,19 +157,19 @@ class HookSimulator {
 
       case 'game_over':
         if (this.roomState) {
+          const finalStandings = message.payload.finalStandings || [];
           this.roomState = {
             ...this.roomState,
             phase: 'GAME_OVER',
             gameEndReason: message.payload.reason,
-            bonusAwarded: message.payload.bonusAwarded,
-            players: message.payload.finalScores.map(s => {
+            rejoinWindowEndsAt: message.payload.rejoinWindowMs ? Date.now() + message.payload.rejoinWindowMs : undefined,
+            players: finalStandings.map(s => {
               const existing = this.roomState.players.find(p => p.id === s.playerId);
-              return existing ? { ...existing, score: s.score } : {
+              return existing ? { ...existing, cardsRemaining: s.cardsRemaining } : {
                 id: s.playerId,
                 name: s.name,
                 status: 'connected',
-                score: s.score,
-                hasCard: false,
+                cardsRemaining: s.cardsRemaining,
                 isHost: false,
                 isYou: false
               };
@@ -683,21 +683,21 @@ async function testGameOverMessage() {
     });
     hook.handleMessage({
       type: 'game_over',
-      payload: { finalScores: [{ playerId: 'p1', name: 'P1', score: 10 }] }
+      payload: { finalStandings: [{ playerId: 'p1', name: 'P1', cardsRemaining: 0 }] }
     });
 
     if (hook.roomState.phase !== 'GAME_OVER') throw new Error('phase should be GAME_OVER');
   });
 
-  await test('game_over updates player scores from finalScores', async () => {
+  await test('game_over updates player cardsRemaining from finalStandings', async () => {
     const hook = new HookSimulator();
     hook.handleMessage({
       type: 'room_state',
       payload: {
         phase: 'PLAYING',
         players: [
-          { id: 'p1', name: 'P1', score: 5, isYou: true },
-          { id: 'p2', name: 'P2', score: 3, isYou: false }
+          { id: 'p1', name: 'P1', cardsRemaining: 5, isYou: true },
+          { id: 'p2', name: 'P2', cardsRemaining: 3, isYou: false }
         ],
         config: {}
       }
@@ -705,39 +705,39 @@ async function testGameOverMessage() {
     hook.handleMessage({
       type: 'game_over',
       payload: {
-        finalScores: [
-          { playerId: 'p1', name: 'P1', score: 25 },
-          { playerId: 'p2', name: 'P2', score: 20 }
+        finalStandings: [
+          { playerId: 'p1', name: 'P1', cardsRemaining: 0 },
+          { playerId: 'p2', name: 'P2', cardsRemaining: 5 }
         ]
       }
     });
 
     const p1 = hook.roomState.players.find(p => p.id === 'p1');
     const p2 = hook.roomState.players.find(p => p.id === 'p2');
-    if (p1.score !== 25) throw new Error('P1 score should be 25');
-    if (p2.score !== 20) throw new Error('P2 score should be 20');
+    if (p1.cardsRemaining !== 0) throw new Error('P1 cardsRemaining should be 0');
+    if (p2.cardsRemaining !== 5) throw new Error('P2 cardsRemaining should be 5');
   });
 
-  await test('game_over sets gameEndReason for deck_exhausted', async () => {
+  await test('game_over sets gameEndReason for stack_emptied', async () => {
     const hook = new HookSimulator();
     hook.handleMessage({
       type: 'room_state',
       payload: {
         phase: 'PLAYING',
-        players: [{ id: 'p1', name: 'P1', score: 5 }],
+        players: [{ id: 'p1', name: 'P1', cardsRemaining: 5 }],
         config: {}
       }
     });
     hook.handleMessage({
       type: 'game_over',
       payload: {
-        finalScores: [{ playerId: 'p1', name: 'P1', score: 10 }],
-        reason: 'deck_exhausted'
+        finalStandings: [{ playerId: 'p1', name: 'P1', cardsRemaining: 0 }],
+        reason: 'stack_emptied'
       }
     });
 
-    if (hook.roomState.gameEndReason !== 'deck_exhausted') {
-      throw new Error(`gameEndReason should be deck_exhausted, got ${hook.roomState.gameEndReason}`);
+    if (hook.roomState.gameEndReason !== 'stack_emptied') {
+      throw new Error(`gameEndReason should be stack_emptied, got ${hook.roomState.gameEndReason}`);
     }
   });
 
@@ -747,54 +747,46 @@ async function testGameOverMessage() {
       type: 'room_state',
       payload: {
         phase: 'PLAYING',
-        players: [{ id: 'p1', name: 'P1', score: 2, isYou: true }],
+        players: [{ id: 'p1', name: 'P1', cardsRemaining: 2, isYou: true }],
         config: {}
       }
     });
     hook.handleMessage({
       type: 'game_over',
       payload: {
-        finalScores: [{ playerId: 'p1', name: 'P1', score: 52 }],
-        reason: 'last_player_standing',
-        bonusAwarded: 50
+        finalStandings: [{ playerId: 'p1', name: 'P1', cardsRemaining: 2 }],
+        reason: 'last_player_standing'
       }
     });
 
     if (hook.roomState.gameEndReason !== 'last_player_standing') {
       throw new Error(`gameEndReason should be last_player_standing, got ${hook.roomState.gameEndReason}`);
     }
-    if (hook.roomState.bonusAwarded !== 50) {
-      throw new Error(`bonusAwarded should be 50, got ${hook.roomState.bonusAwarded}`);
-    }
   });
 
-  await test('game_over with last_player_standing includes bonus in final score', async () => {
+  await test('game_over with last_player_standing has correct cardsRemaining', async () => {
     const hook = new HookSimulator();
     hook.handleMessage({
       type: 'room_state',
       payload: {
         phase: 'PLAYING',
-        players: [{ id: 'survivor', name: 'Survivor', score: 3, isYou: true }],
+        players: [{ id: 'survivor', name: 'Survivor', cardsRemaining: 3, isYou: true }],
         config: {}
       }
     });
 
-    // Survivor started with 3 points, gets 45 bonus cards = 48 total
+    // Survivor wins with 3 cards remaining
     hook.handleMessage({
       type: 'game_over',
       payload: {
-        finalScores: [{ playerId: 'survivor', name: 'Survivor', score: 48 }],
-        reason: 'last_player_standing',
-        bonusAwarded: 45
+        finalStandings: [{ playerId: 'survivor', name: 'Survivor', cardsRemaining: 3 }],
+        reason: 'last_player_standing'
       }
     });
 
     const survivor = hook.roomState.players.find(p => p.id === 'survivor');
-    if (survivor.score !== 48) {
-      throw new Error(`Survivor score should be 48 (3 + 45 bonus), got ${survivor.score}`);
-    }
-    if (hook.roomState.bonusAwarded !== 45) {
-      throw new Error(`bonusAwarded should be 45, got ${hook.roomState.bonusAwarded}`);
+    if (survivor.cardsRemaining !== 3) {
+      throw new Error(`Survivor cardsRemaining should be 3, got ${survivor.cardsRemaining}`);
     }
   });
 
@@ -804,14 +796,14 @@ async function testGameOverMessage() {
       type: 'room_state',
       payload: {
         phase: 'PLAYING',
-        players: [{ id: 'p1', name: 'P1', score: 5 }],
+        players: [{ id: 'p1', name: 'P1', cardsRemaining: 5 }],
         config: {}
       }
     });
     hook.handleMessage({
       type: 'game_over',
       payload: {
-        finalScores: [{ playerId: 'p1', name: 'P1', score: 10 }]
+        finalStandings: [{ playerId: 'p1', name: 'P1', cardsRemaining: 0 }]
         // No reason field (backwards compatibility)
       }
     });
