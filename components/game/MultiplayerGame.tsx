@@ -3,7 +3,7 @@ import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
 import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import Card from '../Card';
-import { Trophy, XCircle, Zap, User, Wifi, Smartphone, AlertCircle } from 'lucide-react';
+import { Trophy, XCircle, Zap, Wifi, Smartphone, AlertCircle } from 'lucide-react';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -432,9 +432,6 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
 
           {/* Your Card */}
           <div className="relative">
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-indigo-600 font-bold tracking-widest text-sm uppercase flex items-center gap-1">
-              <User size={14}/> {you?.name || 'You'}
-            </div>
             {roomState.yourCard && (
               <Card
                 card={roomState.yourCard}
@@ -446,6 +443,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
                 className="border-indigo-500 bg-indigo-50 shadow-indigo-200"
                 interactive={true}
+                label={you?.name || 'You'}
               />
             )}
             {isPenaltyActive && (
