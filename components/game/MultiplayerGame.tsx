@@ -458,11 +458,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
             </div>
           </div>
 
-          {/* Center Card */}
+          {/* Snap Card */}
           <div className="relative">
-            <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-gray-400 font-bold tracking-widest text-sm uppercase">
-              Center
-            </div>
             {roomState.centerCard && (
               <Card
                 card={roomState.centerCard}
@@ -471,6 +468,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
                 disabled={true}
                 interactive={false}
+                label="Snap Card"
               />
             )}
           </div>
@@ -478,7 +476,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
 
         {/* Instructions */}
         <div className="mt-8 text-center text-gray-500 text-sm hidden md:block">
-          Find the ONE symbol that matches between CENTER and YOUR card. Click it on YOUR card!
+          Find the ONE symbol that matches between <strong>SNAP CARD</strong> and <strong>YOUR</strong> card. Click it on <strong>YOUR</strong> card!
         </div>
       </div>
       </div>

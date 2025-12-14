@@ -252,7 +252,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
         </div>
 
         <div className="mt-8 text-white/80 text-center max-w-lg text-sm">
-          <p>Match the common symbol between the center card and your card to win!</p>
+          <p>Match the common symbol between the Snap Card and your card to win!</p>
         </div>
       </div>
     </>

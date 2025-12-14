@@ -162,7 +162,7 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
       </div>
       
       <div className="mt-8 text-white/80 text-center max-w-lg text-sm">
-        <p>Match the common symbol between the center card and your card to win!</p>
+        <p>Match the common symbol between the Snap Card and your card to win!</p>
         <p className="mt-2 text-xs opacity-60">Uses Order-7 Projective Plane mathematics for standard 57-card deck generation.</p>
       </div>
     </div>

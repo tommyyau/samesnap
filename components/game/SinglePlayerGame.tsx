@@ -132,7 +132,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
     setPlayers(newPlayers);
     setGameState(GameState.PLAYING);
-    setMessage('Match the Center Card!');
+    setMessage('Match the Snap Card!');
     setLastWinnerId(null);
     setPenaltyUntil(0);
     setMatchedSymbolId(null);
@@ -239,7 +239,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
       // Reset States and continue
       setMatchedSymbolId(null);
       setGameState(GameState.PLAYING); // Resumes bot timers via useEffect
-      setMessage('Match the Center Card!');
+      setMessage('Match the Snap Card!');
     }
   };
 
@@ -535,7 +535,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
           {/* Instructions */}
           <div className="mt-4 text-center max-w-md text-gray-500 text-xs md:text-sm hidden md:block">
-            Find the ONE symbol that matches between <strong>CENTER</strong> and <strong>YOUR</strong> card. Click it on <strong>YOUR</strong> card!
+            Find the ONE symbol that matches between <strong>SNAP CARD</strong> and <strong>YOUR</strong> card. Click it on <strong>YOUR</strong> card!
           </div>
 
         </div>
