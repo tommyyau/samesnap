@@ -204,41 +204,39 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   };
 
   const proceedToNextTurn = (winnerId: string) => {
-    let gameEnded = false;
+    // Find the winner and their top card BEFORE state updates
+    const winner = players.find(p => p.id === winnerId);
+    if (!winner || winner.cardStack.length === 0) return;
 
+    const topCard = winner.cardStack[0];
+    const newStackLength = winner.cardStack.length - 1;
+
+    // Update center card to winner's top card
+    setCenterCard(topCard);
+
+    // Update players - remove top card from winner's stack
     setPlayers(prevPlayers => {
       const winnerIndex = prevPlayers.findIndex(p => p.id === winnerId);
       if (winnerIndex === -1) return prevPlayers;
 
-      const winner = prevPlayers[winnerIndex];
+      const currentWinner = prevPlayers[winnerIndex];
       const updatedPlayers = [...prevPlayers];
-
-      // Winner's top card goes to center, remove from their stack
-      const newStack = [...winner.cardStack];
-      const topCard = newStack.shift();  // Remove top card
+      const newStack = [...currentWinner.cardStack];
+      newStack.shift(); // Remove top card
 
       updatedPlayers[winnerIndex] = {
-        ...winner,
+        ...currentWinner,
         cardStack: newStack
       };
-
-      // Update center card to winner's old top card
-      if (topCard) {
-        setCenterCard(topCard);
-      }
-
-      // Check for game over: winner has no cards left
-      if (newStack.length === 0) {
-        gameEnded = true;
-        endGame(winnerId);
-      }
 
       return updatedPlayers;
     });
 
-    // Only continue if game didn't end
-    if (!gameEnded) {
-      // Reset States
+    // Check for game over: winner has no cards left
+    if (newStackLength === 0) {
+      endGame(winnerId);
+    } else {
+      // Reset States and continue
       setMatchedSymbolId(null);
       setGameState(GameState.PLAYING); // Resumes bot timers via useEffect
       setMessage('Match the Center Card!');
