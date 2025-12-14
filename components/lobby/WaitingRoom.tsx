@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap } from 'lucide-react';
+import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap, AlertCircle } from 'lucide-react';
 import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 
@@ -18,7 +18,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
-  const { roomState, isConnected, isHost, latency, setConfig, startGame, leaveRoom } = multiplayerHook;
+  const { roomState, isConnected, isHost, latency, connectionError, setConfig, startGame, leaveRoom, clearError } = multiplayerHook;
 
   // Window resize listener for portrait detection
   useEffect(() => {
@@ -97,8 +97,45 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const currentPlayers = roomState?.players.length || 0;
   const canStart = isHost && currentPlayers >= 2;
 
+  const handleErrorRetry = () => {
+    clearError();
+    // Socket will automatically reconnect
+  };
+
+  const handleErrorLeave = () => {
+    clearError();
+    onLeave();
+  };
+
   return (
     <>
+      {/* Connection Error Modal */}
+      {connectionError && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div className="text-red-500 mb-4">
+              <AlertCircle size={48} className="mx-auto" />
+            </div>
+            <h3 className="text-xl font-bold text-gray-800 mb-2">Connection Error</h3>
+            <p className="text-gray-600 mb-6">{connectionError}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleErrorLeave}
+                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold transition-all"
+              >
+                Back to Menu
+              </button>
+              <button
+                onClick={handleErrorRetry}
+                className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-semibold transition-all"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Portrait Orientation Warning */}
       {isMobilePortrait && (
         <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">

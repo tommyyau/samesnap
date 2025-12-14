@@ -24,6 +24,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   const [isHost, setIsHost] = useState(false);
   const [latency, setLatency] = useState<number>(0);
   const [hasReceivedRoomState, setHasReceivedRoomState] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const pingInterval = useRef<ReturnType<typeof setInterval>>();
   const hasJoined = useRef(false);
   // Store countdown value if it arrives before room_state
@@ -73,6 +74,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     room: roomPath,
     onOpen: () => {
       setIsConnected(true);
+      setConnectionError(null);  // Clear any previous error
       const sendJoin = () => {
         // Don't send join if we already have a confirmed session
         if (hasJoined.current) return;
@@ -97,10 +99,13 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         // (e.g., if the session expired server-side)
         if (joinTimeoutRef.current) clearTimeout(joinTimeoutRef.current);
         joinTimeoutRef.current = window.setTimeout(() => {
-          // Only send fallback if we haven't received confirmation yet
-          if (!hasJoined.current && !fallbackJoinSent.current) {
-            // Don't clear playerIdRef yet - wait for server response to either
-            // reconnect or join before updating stored ID
+          if (hasJoined.current) return;
+          if (reconnectPending.current) {
+            // Reconnect never completed - discard stale ID and fall back to fresh join
+            reconnectPending.current = false;
+            clearStoredPlayerId();
+          }
+          if (!fallbackJoinSent.current) {
             sendJoin();
           }
         }, 2000);
@@ -126,6 +131,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
       const message: ServerMessage = JSON.parse(event.data);
       // Defer message handling to avoid setState during render (React StrictMode issue)
       setTimeout(() => handleServerMessage(message), 0);
+    },
+    onError: () => {
+      setConnectionError('Connection failed. Please check your network and try again.');
+      setIsConnected(false);
     },
   });
 
@@ -390,11 +399,6 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         } : null);
         break;
 
-      case 'need_more_players':
-        // Timer expired but not enough players - timer will restart
-        console.log('Need more players:', message.payload.message);
-        break;
-
       case 'room_expired':
         clearStoredPlayerId();
         onRoomExpired?.(message.payload.reason);
@@ -406,6 +410,11 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           // Reconnect failed - clear the stale ID
           clearStoredPlayerId();
           reconnectPending.current = false;
+          // Cancel the pending fallback timeout to prevent double-join
+          if (joinTimeoutRef.current) {
+            clearTimeout(joinTimeoutRef.current);
+            joinTimeoutRef.current = null;
+          }
           // If we haven't sent a fallback join yet, do so now
           if (!fallbackJoinSent.current && !hasJoined.current) {
             fallbackJoinSent.current = true;
@@ -448,6 +457,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     sendMessage({ type: 'play_again', payload: {} });
   }, [sendMessage]);
 
+  const clearError = useCallback(() => {
+    setConnectionError(null);
+  }, []);
+
   useEffect(() => {
     return () => {
       if (pingInterval.current) clearInterval(pingInterval.current);
@@ -464,12 +477,14 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
     isHost,
     latency,
     hasReceivedRoomState,
+    connectionError,
     attemptMatch,
     setConfig,
     startGame,
     leaveRoom,
     kickPlayer,
     playAgain,
+    clearError,
   };
 }
 

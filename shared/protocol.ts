@@ -27,13 +27,12 @@ export type ServerMessage =
   | { type: 'player_reconnected'; payload: { playerId: string } }
   | { type: 'config_updated'; payload: { config: MultiplayerGameConfig } }  // Config changed by host
   | { type: 'countdown'; payload: { seconds: number } }
-  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; yourCardsRemaining: number; allPlayersRemaining: { playerId: string; cardsRemaining: number }[] } }
+  | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; yourCardsRemaining: number; allPlayersRemaining: { playerId: string; cardsRemaining: number }[]; roundNumber: number } }
   | { type: 'round_winner'; payload: { winnerId: string; winnerName: string; matchedSymbolId: number; winnerCardsRemaining: number } }
   | { type: 'game_over'; payload: { winnerId: string; winnerName: string; finalStandings: { playerId: string; name: string; cardsRemaining: number }[]; reason?: 'stack_emptied' | 'last_player_standing'; rejoinWindowMs?: number } }
   | { type: 'match_result'; payload: { success: boolean; reason?: string } }
   | { type: 'penalty'; payload: { serverTimestamp: number; durationMs: number; reason: string } }
   | { type: 'room_expired'; payload: { reason: string } }  // Room timed out
-  | { type: 'need_more_players'; payload: { message: string } }  // Timer expired but not enough players
   | { type: 'host_changed'; payload: { playerId: string } }
   | { type: 'error'; payload: { code: string; message: string } }
   | { type: 'pong'; payload: { serverTimestamp: number; clientTimestamp: number } }

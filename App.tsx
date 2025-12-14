@@ -4,6 +4,7 @@ import SinglePlayerLobby from './components/lobby/SinglePlayerLobby';
 import SinglePlayerGame from './components/game/SinglePlayerGame';
 import WaitingRoom from './components/lobby/WaitingRoom';
 import MultiplayerGame from './components/game/MultiplayerGame';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { GameConfig, RoomPhase } from './shared/types';
 import { generateRoomCode, useMultiplayerGame } from './hooks/useMultiplayerGame';
 
@@ -22,12 +23,14 @@ function MultiplayerWrapper({
   mode,
   onLeave,
   onGameStart,
+  onReturnToWaiting,
 }: {
   roomCode: string;
   playerName: string;
   mode: AppMode.MULTIPLAYER_WAITING | AppMode.MULTIPLAYER_GAME;
   onLeave: () => void;
   onGameStart: () => void;
+  onReturnToWaiting: () => void;
 }) {
   // Track if we've already triggered game start to prevent double-calling
   const hasTriggeredGameStart = React.useRef(false);
@@ -61,6 +64,17 @@ function MultiplayerWrapper({
     }
   }, [mode, isGamePhase, onGameStart]);
 
+  // Transition back to waiting room when room resets after Play Again
+  // This happens when phase returns to WAITING while we're in game mode
+  React.useEffect(() => {
+    if (mode === AppMode.MULTIPLAYER_GAME && phase === RoomPhase.WAITING) {
+      // Room has been reset - go back to waiting room
+      setTimeout(() => {
+        onReturnToWaiting();
+      }, 0);
+    }
+  }, [mode, phase, onReturnToWaiting]);
+
   // Reset the ref when going back to waiting mode
   React.useEffect(() => {
     if (mode === AppMode.MULTIPLAYER_WAITING) {
@@ -68,8 +82,8 @@ function MultiplayerWrapper({
     }
   }, [mode]);
 
-  // Show game screen if we're in game mode OR if game has started
-  const shouldShowGame = mode === AppMode.MULTIPLAYER_GAME || isGamePhase;
+  // Show game screen based on server phase (source of truth)
+  const shouldShowGame = isGamePhase;
 
   if (!shouldShowGame) {
     return (
@@ -130,40 +144,47 @@ function App() {
     setMode(AppMode.MULTIPLAYER_GAME);
   }, []);
 
+  const handleReturnToWaiting = useCallback(() => {
+    setMode(AppMode.MULTIPLAYER_WAITING);
+  }, []);
+
   return (
-    <div className="min-h-screen">
-      {mode === AppMode.MENU && (
-        <MainMenu
-          onSinglePlayer={handleSinglePlayer}
-          onCreateRoom={handleCreateRoom}
-          onJoinRoom={handleJoinRoom}
-        />
-      )}
+    <ErrorBoundary>
+      <div className="min-h-screen">
+        {mode === AppMode.MENU && (
+          <MainMenu
+            onSinglePlayer={handleSinglePlayer}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+          />
+        )}
 
-      {mode === AppMode.SINGLE_PLAYER_LOBBY && (
-        <SinglePlayerLobby
-          onStart={handleStartSinglePlayer}
-          onBack={handleBackToMenu}
-        />
-      )}
+        {mode === AppMode.SINGLE_PLAYER_LOBBY && (
+          <SinglePlayerLobby
+            onStart={handleStartSinglePlayer}
+            onBack={handleBackToMenu}
+          />
+        )}
 
-      {mode === AppMode.SINGLE_PLAYER_GAME && singlePlayerConfig && (
-        <SinglePlayerGame
-          config={singlePlayerConfig}
-          onExit={handleBackToMenu}
-        />
-      )}
+        {mode === AppMode.SINGLE_PLAYER_GAME && singlePlayerConfig && (
+          <SinglePlayerGame
+            config={singlePlayerConfig}
+            onExit={handleBackToMenu}
+          />
+        )}
 
-      {(mode === AppMode.MULTIPLAYER_WAITING || mode === AppMode.MULTIPLAYER_GAME) && multiplayerContext && (
-        <MultiplayerWrapper
-          roomCode={multiplayerContext.roomCode}
-          playerName={multiplayerContext.playerName}
-          mode={mode}
-          onLeave={handleBackToMenu}
-          onGameStart={handleMultiplayerGameStart}
-        />
-      )}
-    </div>
+        {(mode === AppMode.MULTIPLAYER_WAITING || mode === AppMode.MULTIPLAYER_GAME) && multiplayerContext && (
+          <MultiplayerWrapper
+            roomCode={multiplayerContext.roomCode}
+            playerName={multiplayerContext.playerName}
+            mode={mode}
+            onLeave={handleBackToMenu}
+            onGameStart={handleMultiplayerGameStart}
+            onReturnToWaiting={handleReturnToWaiting}
+          />
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }
 

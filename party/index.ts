@@ -13,6 +13,12 @@ const ARBITRATION_WINDOW_MS = 100;
 const RECONNECT_GRACE_PERIOD = 5000;  // 5 seconds - quick reconnect for network glitches
 const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
 const REJOIN_WINDOW_MS = 10000;  // 10 seconds to rejoin after game over
+const MAX_MATCH_ATTEMPTS_PER_SECOND = 10;  // Rate limiting
+
+// Input sanitization helper
+function sanitizePlayerName(name: string): string {
+  return name.trim().slice(0, 50).replace(/[<>]/g, '');
+}
 
 export default class SameSnapRoom implements Party.Server {
   private phase: RoomPhase = RoomPhase.WAITING;
@@ -33,6 +39,7 @@ export default class SameSnapRoom implements Party.Server {
     timeoutId: ReturnType<typeof setTimeout> | null;
   } | null = null;
   private disconnectedPlayers: Map<string, { disconnectedAt: number }> = new Map();
+  private matchAttemptCounts: Map<string, { count: number; resetTime: number }> = new Map();
 
   // Room timeout tracking
   private roomExpiresAt: number | null = null;
@@ -185,9 +192,10 @@ export default class SameSnapRoom implements Party.Server {
       }
     }
 
-    // Check for duplicate names
-    const nameTaken = Array.from(this.players.values()).some(p => p.name === playerName);
-    const finalName = nameTaken ? `${playerName} ${this.players.size + 1}` : playerName;
+    // Sanitize and check for duplicate names
+    const sanitizedName = sanitizePlayerName(playerName);
+    const nameTaken = Array.from(this.players.values()).some(p => p.name === sanitizedName);
+    const finalName = nameTaken ? `${sanitizedName} ${this.players.size + 1}` : sanitizedName;
 
     const isHost = this.players.size === 0;
     const playerId = this.generatePlayerId();
@@ -217,7 +225,7 @@ export default class SameSnapRoom implements Party.Server {
       this.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
 
       // Start room timeout when first player joins
-      // When timer expires, game auto-starts with whoever is here (if 2+ players)
+      // When timer expires, the room closes if the host hasn't started manually
       this.startRoomTimeout();
     } else {
       // Refresh room timeout when additional players join
@@ -231,7 +239,7 @@ export default class SameSnapRoom implements Party.Server {
     // Send full state to new player
     this.sendRoomState(playerId);
 
-    // No auto-start on join - game starts when timer expires or host clicks Start
+    // No auto-start on join - host must click Start before the lobby timer expires
   }
 
   private startRoomTimeout() {
@@ -259,19 +267,16 @@ export default class SameSnapRoom implements Party.Server {
   private handleRoomExpired() {
     if (this.phase !== RoomPhase.WAITING) return; // Don't expire if game started
 
-    const connectedCount = this.getConnectedPlayerCount();
+    console.log(`[Room ${this.room.id}] Lobby timer expired before enough players joined`);
 
-    if (connectedCount >= 2) {
-      // Start the game with whoever is here
-      this.startCountdown();
-    } else {
-      // Not enough players - notify and restart timer
-      this.broadcastToAll({
-        type: 'need_more_players',
-        payload: { message: 'Need at least 1 friend to start! Share the room code.' }
-      });
-      // Restart the 60 second timer
-      this.startRoomTimeout();
+    this.broadcastToAll({
+      type: 'room_expired',
+      payload: { reason: 'Room timed out before the game started. Please create a new room.' }
+    });
+
+    // Close all connections to return everyone to the lobby
+    for (const conn of this.room.getConnections()) {
+      conn.close();
     }
   }
 
@@ -286,10 +291,10 @@ export default class SameSnapRoom implements Party.Server {
       return;
     }
 
-    if (this.phase !== RoomPhase.WAITING) {
+    if (this.phase !== RoomPhase.WAITING && this.phase !== RoomPhase.GAME_OVER) {
       this.sendToPlayer(player.id, {
         type: 'error',
-        payload: { code: ERROR_CODES.INVALID_STATE, message: 'Cannot change config after game started' }
+        payload: { code: ERROR_CODES.INVALID_STATE, message: 'Cannot change config while game in progress' }
       });
       return;
     }
@@ -448,7 +453,8 @@ export default class SameSnapRoom implements Party.Server {
             centerCard: this.centerCard,
             yourCard,
             yourCardsRemaining: player.cardStack.length,
-            allPlayersRemaining: this.getAllPlayersRemaining()
+            allPlayersRemaining: this.getAllPlayersRemaining(),
+            roundNumber: this.roundNumber
           }
         });
       }
@@ -466,6 +472,18 @@ export default class SameSnapRoom implements Party.Server {
     const playerId = this.connectionToPlayerId.get(connectionId);
     if (!playerId) return;
     const serverTimestamp = Date.now();
+
+    // Validate symbolId
+    if (typeof symbolId !== 'number' || !Number.isInteger(symbolId) || symbolId < 0 || symbolId >= 57) {
+      console.error(`Invalid symbolId: ${symbolId} from ${playerId}`);
+      return;
+    }
+
+    // Rate limiting
+    if (!this.checkRateLimit(connectionId)) {
+      console.warn(`Rate limited: ${connectionId}`);
+      return;
+    }
 
     if (this.phase !== RoomPhase.PLAYING) return;
 
@@ -596,7 +614,8 @@ export default class SameSnapRoom implements Party.Server {
             centerCard: this.centerCard,
             yourCard,
             yourCardsRemaining: player.cardStack.length,
-            allPlayersRemaining: this.getAllPlayersRemaining()
+            allPlayersRemaining: this.getAllPlayersRemaining(),
+            roundNumber: this.roundNumber
           }
         });
       }
@@ -977,8 +996,25 @@ export default class SameSnapRoom implements Party.Server {
     }
   }
 
+  private checkRateLimit(connectionId: string): boolean {
+    const now = Date.now();
+    const entry = this.matchAttemptCounts.get(connectionId);
+
+    if (!entry || now > entry.resetTime) {
+      this.matchAttemptCounts.set(connectionId, { count: 1, resetTime: now + 1000 });
+      return true;
+    }
+
+    if (entry.count >= MAX_MATCH_ATTEMPTS_PER_SECOND) {
+      return false; // Rate limited
+    }
+
+    entry.count++;
+    return true;
+  }
+
   private getCardById(cardId: number | null): CardData | null {
-    if (cardId === null) return null;
+    if (cardId === null || cardId < 0 || cardId >= this.fullDeck.length) return null;
     return this.fullDeck.find(c => c.id === cardId) || null;
   }
 
