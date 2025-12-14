@@ -377,7 +377,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                   <span>{p.name}</span>
                 </div>
                 <span className={p.cardStack.length === 0 ? 'text-green-600' : 'text-indigo-600'}>
-                  {p.cardStack.length === 0 ? 'WINNER!' : `${p.cardStack.length} cards left`}
+                  {p.cardStack.length === 0 ? 'WINNER!' : p.cardStack.length}
                 </span>
               </div>
             ))}
@@ -475,7 +475,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    </div>
                  </div>
                  <span className="text-xs font-bold mt-1 text-gray-500">{bot.name}</span>
-                 <span className="text-xs text-gray-400">{bot.cardStack.length} left</span>
               </div>
             ))}
           </div>

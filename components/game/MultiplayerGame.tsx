@@ -252,7 +252,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                     {wantsRematch && <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Ready</span>}
                   </div>
                   <span className={p.cardsRemaining === 0 ? 'text-green-600' : 'text-indigo-600'}>
-                    {p.cardsRemaining === 0 ? 'WINNER!' : `${p.cardsRemaining} cards left`}
+                    {p.cardsRemaining === 0 ? 'WINNER!' : p.cardsRemaining}
                   </span>
                 </div>
               );
@@ -276,7 +276,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 onClick={handlePlayAgain}
                 className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold transition"
               >
-                Play Again
+                Rejoin Room
               </button>
             )}
             {(hasClickedPlayAgain || youWantRematch) && rejoinTimeLeft > 0 && (
@@ -420,7 +420,6 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 </div>
               </div>
               <span className="text-xs font-bold mt-1 text-gray-500">{player.name}</span>
-              <span className="text-xs text-gray-400">{player.cardsRemaining} left</span>
               {roomState.roundWinnerId === player.id && <div className="text-xs text-green-600 font-bold">Got it!</div>}
             </div>
           ))}

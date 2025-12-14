@@ -13,7 +13,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
-  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   // Window resize listener for portrait detection

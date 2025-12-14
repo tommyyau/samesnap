@@ -14,7 +14,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [copied, setCopied] = useState(false);
   // Local state for host controls - always synced from server config when it changes
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
-  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.LONG);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 

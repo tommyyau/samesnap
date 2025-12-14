@@ -12,7 +12,7 @@ const PENALTY_DURATION = 3000;
 const ARBITRATION_WINDOW_MS = 100;
 const RECONNECT_GRACE_PERIOD = 5000;  // 5 seconds - quick reconnect for network glitches
 const ROOM_TIMEOUT = 60000;  // 60 seconds to fill the room
-const REJOIN_WINDOW_MS = 10000;  // 10 seconds to rejoin after game over
+const REJOIN_WINDOW_MS = 20000;  // 20 seconds to rejoin after game over
 const MAX_MATCH_ATTEMPTS_PER_SECOND = 10;  // Rate limiting
 
 // Input sanitization helper
