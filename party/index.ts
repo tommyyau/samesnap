@@ -219,7 +219,7 @@ export default class SameSnapRoom implements Party.Server {
       // Initialize default config
       this.config = {
         cardDifficulty: CardDifficulty.EASY,
-        gameDuration: GameDuration.LONG,
+        gameDuration: GameDuration.SHORT,
       };
 
       this.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
@@ -302,7 +302,7 @@ export default class SameSnapRoom implements Party.Server {
     // Merge with defaults to ensure backward compatibility
     this.config = {
       cardDifficulty: config.cardDifficulty,
-      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.LONG,
+      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.SHORT,
     };
 
     // Broadcast config to all players so UI stays in sync
@@ -336,7 +336,7 @@ export default class SameSnapRoom implements Party.Server {
     // Merge with defaults to ensure backward compatibility
     this.config = {
       cardDifficulty: config.cardDifficulty,
-      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.LONG,
+      gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.SHORT,
     };
     this.startCountdown();
   }
@@ -407,7 +407,7 @@ export default class SameSnapRoom implements Party.Server {
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting
-    const gameDuration = this.config?.gameDuration ?? GameDuration.LONG;
+    const gameDuration = this.config?.gameDuration ?? GameDuration.SHORT;
     const deckSize = Math.min(gameDuration, generatedDeck.length);
     this.fullDeck = generatedDeck.slice(0, deckSize);
     this.roundNumber = 0;
