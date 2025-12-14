@@ -96,11 +96,11 @@ export const startBackgroundMusic = () => {
     // Add some variation every 4th bar
     const octave = Math.floor(step / 16) % 2 === 1 ? 2 : 1;
 
-    playNote(ctx, scale[noteIndex] * octave, now, 0.05);
+    playNote(ctx, scale[noteIndex] * octave, now, 0.15);
 
     // Occasional harmony note
     if (step % 4 === 0) {
-      playNote(ctx, scale[(noteIndex + 2) % scale.length] * 0.5, now, 0.03);
+      playNote(ctx, scale[(noteIndex + 2) % scale.length] * 0.5, now, 0.1);
     }
 
     step++;
