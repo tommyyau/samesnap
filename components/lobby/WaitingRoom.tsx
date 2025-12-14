@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap, AlertCircle } from 'lucide-react';
 import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
+import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 
 interface WaitingRoomProps {
   roomCode: string;
@@ -83,6 +84,9 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   };
 
   const handleStartGame = () => {
+    // Unlock audio on iOS/Safari - must happen during user gesture
+    unlockAudio();
+    startBackgroundMusic();
     startGame({
       cardDifficulty: cardDifficulty ?? CardDifficulty.EASY,
       gameDuration,

@@ -10,7 +10,8 @@ const initAudio = (): AudioContext | null => {
       audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     }
     if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+      // Safari requires resume() to be called - fire and forget but it will complete
+      audioCtx.resume().catch(() => {});
     }
     // Check if context is usable
     if (!Number.isFinite(audioCtx.currentTime)) {
@@ -25,16 +26,28 @@ const initAudio = (): AudioContext | null => {
 // Safe wrapper to check if a time value is usable
 const isValidTime = (time: number): boolean => Number.isFinite(time) && time >= 0;
 
-// Unlock audio on iOS - must be called during a user gesture
+// Unlock audio on iOS/Safari - MUST be called during a user gesture (click/tap)
 export const unlockAudio = () => {
-  const ctx = initAudio();
-  if (!ctx) return;
-  // Create and immediately play a silent buffer to unlock audio on iOS
-  const buffer = ctx.createBuffer(1, 1, 22050);
-  const source = ctx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(ctx.destination);
-  source.start(0);
+  try {
+    // Create context if needed
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+
+    // Resume if suspended - Safari requires this during user gesture
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+
+    // Create and play a silent buffer to fully unlock audio on iOS/Safari
+    const buffer = audioCtx.createBuffer(1, 1, 22050);
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioCtx.destination);
+    source.start(0);
+  } catch {
+    // Ignore errors - audio just won't work
+  }
 };
 
 // Play a short "pluck" sound (Marimba-ish)

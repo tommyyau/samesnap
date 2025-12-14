@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
-import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound } from '../../utils/sound';
+import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import Card from '../Card';
 import { Trophy, XCircle, Zap, User, Wifi, Smartphone, AlertCircle } from 'lucide-react';
 
@@ -123,6 +123,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const handleSymbolClick = (symbol: SymbolItem) => {
     if (roomState?.phase !== RoomPhase.PLAYING) return;
     if (roomState.penaltyUntil && Date.now() < roomState.penaltyUntil) return;
+    // Unlock audio on first click (Safari requires user gesture)
+    unlockAudio();
     attemptMatch(symbol.id);
   };
 
