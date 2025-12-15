@@ -3,7 +3,7 @@ import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
 import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import Card from '../Card';
-import { Trophy, XCircle, Zap, Wifi, Smartphone, AlertCircle } from 'lucide-react';
+import { Trophy, XCircle, Zap, Wifi, AlertCircle } from 'lucide-react';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -46,9 +46,6 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     const cardSize = Math.min(heightConstraint, widthConstraint, 320);
     return Math.max(150, cardSize);
   };
-
-  // Check if mobile portrait
-  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
   // Start/stop background music
   useEffect(() => {
@@ -346,26 +343,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
       )}
 
-      {/* Mobile Portrait Orientation Warning */}
-      {isMobilePortrait && (
-        <div className="fixed inset-0 z-[60] bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
-          <div className="relative mb-8">
-            <Smartphone size={64} className="animate-spin-slow" />
-            <div className="absolute top-0 right-0 -mr-4 -mt-2">
-              <Zap className="text-yellow-400 animate-pulse" size={24}/>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
-          <p className="text-indigo-200 mb-8 max-w-xs">
-            SameSnap is designed to be played in landscape mode for the best experience.
-          </p>
-          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
-            Rotate to continue
-          </div>
-        </div>
-      )}
-
-      <div className={`flex flex-col h-screen bg-slate-100 overflow-hidden relative ${isMobilePortrait ? 'blur-sm' : ''}`}>
+      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative">
         {/* WIN/LOSE OVERLAY */}
       {isAnimating && (
         <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-300 ${

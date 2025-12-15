@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, Smartphone, Zap, AlertCircle } from 'lucide-react';
+import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
 import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
@@ -17,21 +17,8 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
 
   const { roomState, isConnected, isHost, latency, connectionError, setConfig, startGame, leaveRoom, clearError } = multiplayerHook;
-
-  // Window resize listener for portrait detection
-  useEffect(() => {
-    const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Check if mobile portrait
-  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
   // Always sync local state FROM server config when it changes
   // This ensures new hosts see the correct config after host transfer
@@ -140,26 +127,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
         </div>
       )}
 
-      {/* Mobile Portrait Orientation Warning */}
-      {isMobilePortrait && (
-        <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
-          <div className="relative mb-8">
-            <Smartphone size={64} className="animate-spin-slow" />
-            <div className="absolute top-0 right-0 -mr-4 -mt-2">
-              <Zap className="text-yellow-400 animate-pulse" size={24}/>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
-          <p className="text-indigo-200 mb-8 max-w-xs">
-            SameSnap is designed to be played in landscape mode for the best experience.
-          </p>
-          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
-            Rotate to continue
-          </div>
-        </div>
-      )}
-
-      <div className={`flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4 ${isMobilePortrait ? 'blur-sm' : ''}`}>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 p-4">
         <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full">
         {/* Connection Status */}
         <div className="flex justify-between items-center mb-4">

@@ -4,7 +4,7 @@ import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
 import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
 import Card from '../Card';
-import { Trophy, XCircle, Zap, Smartphone } from 'lucide-react';
+import { Trophy, XCircle, Zap } from 'lucide-react';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -63,9 +63,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
   const cardSize = calculateCardSize();
   const botCardSize = Math.max(50, cardSize * 0.3);
-
-  // Check if mobile portrait
-  const isMobilePortrait = dimensions.width < 768 && dimensions.height > dimensions.width;
 
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
@@ -403,27 +400,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   }
 
   return (
-    <>
-      {/* Mobile Portrait Orientation Warning */}
-      {isMobilePortrait && (
-        <div className="fixed inset-0 z-50 bg-indigo-900 text-white flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
-          <div className="relative mb-8">
-            <Smartphone size={64} className="animate-spin-slow" />
-            <div className="absolute top-0 right-0 -mr-4 -mt-2">
-              <Zap className="text-yellow-400 animate-pulse" size={24}/>
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold mb-4">Please Rotate Your Device</h2>
-          <p className="text-indigo-200 mb-8 max-w-xs">
-            SameSnap is designed to be played in landscape mode for the best experience.
-          </p>
-          <div className="text-sm opacity-50 font-mono border border-indigo-700 px-3 py-1 rounded">
-            Rotate to continue
-          </div>
-        </div>
-      )}
-
-      <div className={`flex flex-col h-screen bg-slate-100 overflow-hidden ${isMobilePortrait ? 'blur-sm' : ''}`}>
+      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden">
         {/* Top Bar: Stats */}
         <div className="bg-white shadow-sm h-12 shrink-0 px-2 md:px-4 flex justify-between items-center z-10">
           <div className="flex items-center gap-2 md:gap-4">
@@ -480,7 +457,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
           </div>
 
           {/* Main Card Area - Centered */}
-          <div className="flex-1 flex items-center justify-around max-w-6xl mx-auto w-full gap-8 pb-4 px-4 md:px-10">
+          <div className="flex-1 flex flex-col md:flex-row items-center justify-center max-w-6xl mx-auto w-full gap-8 pb-4 px-4 md:px-10">
 
             {/* Player Hand (LEFT) */}
             <div className="relative">
@@ -540,7 +517,6 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
         </div>
       </div>
-    </>
   );
 };
 
