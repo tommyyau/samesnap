@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
-import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
+import { CardDifficulty, GameDuration, RoomPhase, PlayerStatus } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 
@@ -220,7 +220,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                   {player.isYou && <span className="text-xs text-indigo-500">(You)</span>}
                 </div>
                 <div className={`w-2 h-2 rounded-full ${
-                  player.status === 'connected' ? 'bg-green-500' : 'bg-red-500'
+                  player.status === PlayerStatus.CONNECTED ? 'bg-green-500' : 'bg-red-500'
                 }`} />
               </div>
             ))}
