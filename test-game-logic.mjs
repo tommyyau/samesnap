@@ -63,6 +63,23 @@ const SYMBOLS_HARD = EMOJIS_HARD.map((char, index) => ({
   name: `HardSymbol ${index}`
 }));
 
+// INSANE mode - 57 yellow smiley faces with different expressions
+const EMOJIS_INSANE = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '🤣', '😂',
+  '🙂', '🙃', '😉', '😊', '😇', '🥰', '😍', '🤩',
+  '😘', '😗', '😚', '😙', '😋', '😛', '😜', '🤪',
+  '🤑', '🤗', '🤭', '🤫', '🤔', '🤐', '🤨', '🤥',
+  '😐', '😑', '😶', '😏', '😒', '🙄', '😬', '😌',
+  '😔', '😪', '🤤', '😴', '😷', '🥴', '😵', '🥱',
+  '🤯', '🤠', '🥳', '🥸', '😎', '🤓', '🧐', '😢', '😭'
+];
+
+const SYMBOLS_INSANE = EMOJIS_INSANE.map((char, index) => ({
+  id: index,
+  char,
+  name: `InsaneSymbol ${index}`
+}));
+
 function shuffle(array) {
   const newArray = [...array];
   for (let i = newArray.length - 1; i > 0; i--) {
@@ -128,6 +145,10 @@ test('EMOJIS_HARD array has at least 57 symbols', () => {
   assert(EMOJIS_HARD.length >= 57, `Expected >= 57, got ${EMOJIS_HARD.length}`);
 });
 
+test('EMOJIS_INSANE array has exactly 57 symbols', () => {
+  assert(EMOJIS_INSANE.length === 57, `Expected 57, got ${EMOJIS_INSANE.length}`);
+});
+
 test('SYMBOLS array maps correctly', () => {
   assert(SYMBOLS.length === EMOJIS.length);
   assert(SYMBOLS[0].id === 0);
@@ -138,6 +159,12 @@ test('SYMBOLS_HARD array maps correctly', () => {
   assert(SYMBOLS_HARD.length === EMOJIS_HARD.length);
   assert(SYMBOLS_HARD[0].id === 0);
   assert(SYMBOLS_HARD[0].char === '🍎');
+});
+
+test('SYMBOLS_INSANE array maps correctly', () => {
+  assert(SYMBOLS_INSANE.length === EMOJIS_INSANE.length);
+  assert(SYMBOLS_INSANE[0].id === 0);
+  assert(SYMBOLS_INSANE[0].char === '😀');
 });
 
 test('BOT_NAMES has 10 unique names', () => {
@@ -178,6 +205,17 @@ test('generateDeck with custom symbols (HARD mode) works', () => {
   firstCard.symbols.forEach(sym => {
     const found = SYMBOLS_HARD.some(s => s.id === sym.id);
     assert(found, `Symbol ${sym.id} not found in HARD symbols`);
+  });
+});
+
+test('generateDeck with custom symbols (INSANE mode) works', () => {
+  const deck = generateDeck(7, SYMBOLS_INSANE);
+  assert(deck.length === 57);
+  // Check symbols come from INSANE set
+  const firstCard = deck[0];
+  firstCard.symbols.forEach(sym => {
+    const found = SYMBOLS_INSANE.some(s => s.id === sym.id);
+    assert(found, `Symbol ${sym.id} not found in INSANE symbols`);
   });
 });
 
@@ -289,15 +327,20 @@ console.log('\n🎮 CARD DIFFICULTY TESTS\n');
 const CardDifficulty = {
   EASY: 'EASY',
   MEDIUM: 'MEDIUM',
-  HARD: 'HARD'
+  HARD: 'HARD',
+  INSANE: 'INSANE'
 };
 
-test('CardDifficulty has three values', () => {
-  assert(Object.keys(CardDifficulty).length === 3);
+test('CardDifficulty has four values', () => {
+  assert(Object.keys(CardDifficulty).length === 4);
 });
 
 test('CardDifficulty.HARD exists', () => {
   assert(CardDifficulty.HARD === 'HARD');
+});
+
+test('CardDifficulty.INSANE exists', () => {
+  assert(CardDifficulty.INSANE === 'INSANE');
 });
 
 // ============================================

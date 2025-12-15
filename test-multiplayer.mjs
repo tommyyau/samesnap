@@ -543,11 +543,11 @@ async function runGameFlowTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 50 } }  // LONG duration for traditional Dobble
     }));
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
-    // With traditional Dobble: 50 cards, 2 players, 1 center = (50-1)/2 = 24 cards each
+    // With traditional Dobble (LONG): 50 cards, 2 players, 1 center = (50-1)/2 = 24 cards each
     const expectedCardsPerPlayer = Math.floor((50 - 1) / 2);
     if (firstRound.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
       throw new Error(`Expected ${expectedCardsPerPlayer} cards per player, got ${firstRound.payload.yourCardsRemaining}`);
@@ -1504,8 +1504,8 @@ async function runRejoinTests() {
     if (!gameOver.payload.rejoinWindowMs) {
       throw new Error('game_over should include rejoinWindowMs');
     }
-    if (gameOver.payload.rejoinWindowMs !== 10000) {
-      throw new Error(`Expected rejoinWindowMs=10000, got ${gameOver.payload.rejoinWindowMs}`);
+    if (gameOver.payload.rejoinWindowMs !== 20000) {
+      throw new Error(`Expected rejoinWindowMs=20000, got ${gameOver.payload.rejoinWindowMs}`);
     }
 
     cleanup(host);
@@ -1606,9 +1606,9 @@ async function runRejoinTests() {
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
 
-    // Wait for the rejoin window to expire (10s + buffer)
-    // This will take ~10s so we use a longer timeout
-    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 15000);
+    // Wait for the rejoin window to expire (20s + buffer)
+    // This will take ~20s so we use a longer timeout
+    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 25000);
 
     if (!bootMsg.payload.message) {
       throw new Error('solo_rejoin_boot should have a message');
@@ -1710,8 +1710,8 @@ async function runRejoinTests() {
     await waitForMessage(host, 'game_over', 5000);
 
     // Host does NOT send play_again - just waits for window to expire
-    // Wait for room_expired message (10s + buffer)
-    const expired = await waitForMessage(host, 'room_expired', 15000);
+    // Wait for room_expired message (20s + buffer)
+    const expired = await waitForMessage(host, 'room_expired', 25000);
 
     if (!expired.payload.reason.includes('rejoined')) {
       throw new Error(`Expected reason about no rejoins, got: ${expired.payload.reason}`);
@@ -1996,8 +1996,8 @@ async function runGameOverExitTests() {
     await waitForMessage(host, 'play_again_ack', 3000);
     host.messages = [];
 
-    // Wait 5 seconds (half the rejoin window)
-    await sleep(5000);
+    // Wait 10 seconds (half the 20s rejoin window)
+    await sleep(10000);
 
     // Check no new game_over was received (timer wasn't reset)
     const extraGameOvers = host.messages.filter(m => m.type === 'game_over');
@@ -2005,19 +2005,19 @@ async function runGameOverExitTests() {
       throw new Error('BUG: Rejoin timer was reset, causing new game_over broadcast!');
     }
 
-    // Now wait for the remaining ~5s + buffer for solo_rejoin_boot
-    // (Total ~10s from original game_over)
-    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 8000);
+    // Now wait for the remaining ~10s + buffer for solo_rejoin_boot
+    // (Total ~20s from original game_over)
+    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 15000);
 
-    // The solo boot should arrive ~10s after the ORIGINAL game_over
+    // The solo boot should arrive ~20s after the ORIGINAL game_over
     const bootReceivedAt = Date.now();
     const timeFromGameOver = bootReceivedAt - gameOverReceivedAt;
 
-    // Should be approximately 10s (within 2s tolerance for test timing)
-    if (timeFromGameOver < 8000) {
+    // Should be approximately 20s (within 4s tolerance for test timing)
+    if (timeFromGameOver < 16000) {
       throw new Error(`BUG: solo_rejoin_boot arrived too early (${timeFromGameOver}ms) - timer may have been reset!`);
     }
-    if (timeFromGameOver > 14000) {
+    if (timeFromGameOver > 28000) {
       throw new Error(`solo_rejoin_boot arrived too late (${timeFromGameOver}ms)`);
     }
 

@@ -31,20 +31,42 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Calculate responsive card size
+  // Calculate responsive card size - optimized for mobile
   const calculateCardSize = () => {
     const { width, height } = dimensions;
-    const topBarHeight = 48;
-    const opponentRowHeight = 80;
-    const padding = 32;
+    const isMobile = width < 768;
+    const isPortrait = height > width;
+
+    // Tighter spacing on mobile
+    const topBarHeight = isMobile ? 40 : 48;
+    const opponentRowHeight = isMobile ? 48 : 90;  // Tiny opponent indicators on mobile (extra space for badges)
+    const padding = isMobile ? 4 : 32;  // Less edge padding on mobile
+    const cardGap = isMobile ? 16 : 32;  // More gap between cards for breathing room
+
     const availableHeight = height - topBarHeight - opponentRowHeight - padding * 2;
     const availableWidth = width - padding * 2;
 
-    const heightConstraint = availableHeight * 0.6;
-    const widthConstraint = availableWidth * 0.35;
+    let cardSize: number;
 
-    const cardSize = Math.min(heightConstraint, widthConstraint, 320);
-    return Math.max(150, cardSize);
+    if (isMobile && isPortrait) {
+      // Portrait mobile: cards stack vertically, can use full width
+      // Two cards + gap must fit in available height
+      const maxHeightPerCard = (availableHeight - cardGap) / 2;
+      const maxWidth = availableWidth * 0.85; // Cards can be 85% of screen width
+      cardSize = Math.min(maxHeightPerCard, maxWidth, 380);
+    } else if (isMobile) {
+      // Landscape mobile: cards side by side
+      const heightConstraint = availableHeight * 0.75;
+      const widthConstraint = (availableWidth - cardGap) / 2 * 0.9;
+      cardSize = Math.min(heightConstraint, widthConstraint, 380);
+    } else {
+      // Desktop/tablet: cards side by side with more padding
+      const heightConstraint = availableHeight * 0.6;
+      const widthConstraint = availableWidth * 0.35;
+      cardSize = Math.min(heightConstraint, widthConstraint, 380);
+    }
+
+    return Math.max(140, cardSize);
   };
 
   // Start/stop background music
@@ -343,7 +365,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
       )}
 
-      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative">
+      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative safe-all">
         {/* WIN/LOSE OVERLAY */}
       {isAnimating && (
         <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-300 ${
@@ -367,8 +389,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
       )}
 
-      {/* Top Bar */}
-      <div className="bg-white shadow-sm p-2 flex justify-between items-center z-10">
+      {/* Top Bar - tighter on mobile */}
+      <div className="bg-white shadow-sm h-10 sm:h-12 px-2 flex justify-between items-center z-10">
         <div className="flex items-center gap-4">
           <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-sm px-3 py-1 rounded hover:bg-slate-100">
             EXIT
@@ -384,29 +406,29 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
       </div>
 
-      {/* Main Game Area */}
-      <div className="flex-1 relative flex flex-col items-center justify-center p-4">
+      {/* Main Game Area - tighter mobile spacing */}
+      <div className="flex-1 relative flex flex-col items-center p-2 sm:p-4">
 
-        {/* Opponents (Top) */}
-        <div className="flex gap-4 mb-4 overflow-x-auto w-full justify-center py-2">
+        {/* Opponents (Top) - tiny indicators on mobile */}
+        <div className="flex gap-0.5 sm:gap-4 w-full justify-center min-h-[48px] sm:min-h-[90px] shrink-0 items-start pt-0.5 z-20 relative overflow-visible">
           {opponents.map(player => (
             <div key={player.id} className={`flex flex-col items-center transition-all ${roomState.roundWinnerId === player.id ? 'scale-110' : 'opacity-80'}`}>
               <div className="relative">
-                <div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500 border-4 border-white shadow">
+                <div className="w-7 h-7 sm:w-16 sm:h-16 rounded-full bg-gray-200 flex items-center justify-center text-sm sm:text-2xl font-bold text-gray-500 border sm:border-4 border-white shadow">
                   {player.name[0].toUpperCase()}
                 </div>
-                <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">
+                <div className="absolute -bottom-0.5 -right-0.5 bg-indigo-600 text-white text-[8px] sm:text-xs font-bold w-3.5 h-3.5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center border border-white z-30">
                   {player.cardsRemaining}
                 </div>
               </div>
-              <span className="text-xs font-bold mt-1 text-gray-500">{player.name}</span>
-              {roomState.roundWinnerId === player.id && <div className="text-xs text-green-600 font-bold">Got it!</div>}
+              <span className="text-[8px] sm:text-xs font-bold mt-0.5 text-gray-500 truncate max-w-[40px] sm:max-w-none">{player.name}</span>
+              {roomState.roundWinnerId === player.id && <div className="text-[8px] sm:text-xs text-green-600 font-bold">Got it!</div>}
             </div>
           ))}
         </div>
 
-        {/* Center Arena */}
-        <div className="flex flex-col md:flex-row items-center gap-8 md:gap-16">
+        {/* Center Arena - evenly spaced on mobile, centered on desktop */}
+        <div className="flex-1 flex flex-col md:flex-row items-center justify-evenly md:justify-center gap-4 sm:gap-6 md:gap-16 w-full max-w-6xl">
 
           {/* Your Card */}
           <div className="relative">
@@ -429,7 +451,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 <XCircle className="text-red-600 w-16 h-16" />
               </div>
             )}
-            <div className="absolute -bottom-4 -right-4 bg-indigo-600 text-white text-lg font-bold w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+            <div className="absolute bottom-[12%] right-[3%] bg-indigo-600 text-white text-lg font-bold w-12 h-12 rounded-full flex items-center justify-center border-4 border-white shadow-lg z-10">
               {you?.cardsRemaining ?? 0}
             </div>
           </div>
@@ -451,7 +473,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
 
         {/* Instructions */}
-        <div className="mt-8 text-center text-gray-500 text-sm hidden md:block">
+        <div className="mt-4 sm:mt-8 text-center text-gray-500 text-sm hidden md:block">
           Find the ONE symbol that matches between <strong>SNAP CARD</strong> and <strong>YOUR</strong> card. Click it on <strong>YOUR</strong> card!
         </div>
       </div>

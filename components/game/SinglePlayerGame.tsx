@@ -44,25 +44,48 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Calculate responsive card size
+  // Calculate responsive card size - optimized for mobile
   const calculateCardSize = () => {
     const { width, height } = dimensions;
-    const topBarHeight = 48;
-    const botRowHeight = 60;
-    const padding = 32;
+    const isMobile = width < 768;
+    const isPortrait = height > width;
+
+    // Tighter spacing on mobile
+    const topBarHeight = isMobile ? 40 : 48;
+    const botRowHeight = isMobile ? 48 : 72;  // Tiny bot indicators on mobile (extra space for badges)
+    const padding = isMobile ? 4 : 32;  // Less edge padding on mobile
+    const cardGap = isMobile ? 16 : 32;  // More gap between cards for breathing room
+
     const availableHeight = height - topBarHeight - botRowHeight - padding * 2;
     const availableWidth = width - padding * 2;
 
-    // Cards should fit in available space with room for both
-    const heightConstraint = availableHeight * 0.6;
-    const widthConstraint = availableWidth * 0.35;
+    let cardSize: number;
 
-    const cardSize = Math.min(heightConstraint, widthConstraint, 320);
-    return Math.max(150, cardSize);
+    if (isMobile && isPortrait) {
+      // Portrait mobile: cards stack vertically, can use full width
+      // Two cards + gap must fit in available height
+      const maxHeightPerCard = (availableHeight - cardGap) / 2;
+      const maxWidth = availableWidth * 0.85; // Cards can be 85% of screen width
+      cardSize = Math.min(maxHeightPerCard, maxWidth, 380);
+    } else if (isMobile) {
+      // Landscape mobile: cards side by side
+      const heightConstraint = availableHeight * 0.75;
+      const widthConstraint = (availableWidth - cardGap) / 2 * 0.9;
+      cardSize = Math.min(heightConstraint, widthConstraint, 380);
+    } else {
+      // Desktop/tablet: cards side by side with more padding
+      const heightConstraint = availableHeight * 0.6;
+      const widthConstraint = availableWidth * 0.35;
+      cardSize = Math.min(heightConstraint, widthConstraint, 380);
+    }
+
+    return Math.max(140, cardSize);
   };
 
   const cardSize = calculateCardSize();
-  const botCardSize = Math.max(50, cardSize * 0.3);
+  const isMobile = dimensions.width < 768;
+  // Tiny bot cards on mobile - just indicators, not detailed views
+  const botCardSize = isMobile ? 32 : Math.max(50, cardSize * 0.25);
 
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
@@ -404,9 +427,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   }
 
   return (
-      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden">
-        {/* Top Bar: Stats */}
-        <div className="bg-white shadow-sm h-12 shrink-0 px-2 md:px-4 flex justify-between items-center z-10">
+      <div className="flex flex-col h-screen bg-slate-100 overflow-hidden safe-all">
+        {/* Top Bar: Stats - tighter on mobile */}
+        <div className="bg-white shadow-sm h-10 sm:h-12 shrink-0 px-2 md:px-4 flex justify-between items-center z-10">
           <div className="flex items-center gap-2 md:gap-4">
              <button onClick={handleExit} className="text-slate-500 hover:text-red-600 font-bold text-xs md:text-sm px-2 md:px-3 py-1 rounded hover:bg-slate-100 transition-colors">EXIT</button>
           </div>
@@ -422,8 +445,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
         {/* Game Arena */}
         <div className="flex-1 flex flex-col relative w-full h-full">
 
-          {/* Bot Row - Top of screen, fixed height */}
-          <div className="flex justify-center items-start pt-2 gap-3 md:gap-6 shrink-0 h-[80px] z-50">
+          {/* Bot Row - Top of screen, tiny indicators on mobile */}
+          <div className="flex justify-center items-start pt-0.5 gap-0.5 sm:gap-3 md:gap-6 shrink-0 min-h-[48px] sm:min-h-[72px] z-20 relative overflow-visible">
             {bots.map(bot => (
               <div
                 key={bot.id}
@@ -451,17 +474,17 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                        interactive={false}
                      />
                    )}
-                   <div className="absolute -bottom-1 -right-1 bg-indigo-600 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow">
+                   <div className="absolute -bottom-0.5 -right-0.5 bg-indigo-600 text-white text-[8px] sm:text-xs font-bold w-3.5 h-3.5 sm:w-5 sm:h-5 rounded-full flex items-center justify-center border border-white shadow z-30">
                      {bot.cardStack.length}
                    </div>
                  </div>
-                 <span className="text-xs font-bold mt-1 text-gray-500">{bot.name}</span>
+                 <span className="text-[8px] sm:text-xs font-bold mt-0.5 text-gray-500 truncate max-w-[40px] sm:max-w-none">{bot.name}</span>
               </div>
             ))}
           </div>
 
-          {/* Main Card Area - Centered */}
-          <div className="flex-1 flex flex-col md:flex-row items-center justify-center max-w-6xl mx-auto w-full gap-8 pb-4 px-4 md:px-10">
+          {/* Main Card Area - Evenly spaced on mobile, centered on desktop */}
+          <div className="flex-1 flex flex-col md:flex-row items-center justify-evenly md:justify-center max-w-6xl mx-auto w-full gap-4 sm:gap-6 md:gap-8 px-1 sm:px-4 md:px-10">
 
             {/* Player Hand (LEFT) */}
             <div className="relative">
@@ -487,7 +510,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                    <XCircle className="text-red-600 w-16 h-16 drop-shadow-lg" />
                  </div>
                )}
-               <div className="absolute -bottom-3 -right-3 bg-indigo-600 text-white text-base font-bold w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg">
+               <div className="absolute bottom-[12%] right-[3%] bg-indigo-600 text-white text-base font-bold w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg z-10">
                   {humanPlayer?.cardStack.length ?? 0}
                </div>
             </div>
