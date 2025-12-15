@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import MainMenu from './components/lobby/MainMenu';
 import SinglePlayerLobby from './components/lobby/SinglePlayerLobby';
 import SinglePlayerGame from './components/game/SinglePlayerGame';
@@ -150,6 +151,7 @@ function App() {
 
   return (
     <ErrorBoundary>
+      <Analytics />
       <div className="min-h-screen">
         {mode === AppMode.MENU && (
           <MainMenu

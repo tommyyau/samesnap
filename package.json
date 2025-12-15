@@ -23,6 +23,7 @@
     "test:quick": "node scripts/run-tests.mjs quick"
   },
   "dependencies": {
+    "@vercel/analytics": "^1.6.1",
     "lucide-react": "^0.560.0",
     "partysocket": "^1.1.6",
     "react": "^19.2.1",
