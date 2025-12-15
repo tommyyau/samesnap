@@ -18,6 +18,7 @@ export enum CardDifficulty {
   EASY = 'EASY',
   MEDIUM = 'MEDIUM',
   HARD = 'HARD',
+  INSANE = 'INSANE',
 }
 
 export enum GameDuration {

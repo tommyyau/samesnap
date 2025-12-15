@@ -6,7 +6,7 @@ import {
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
 import { generateDeck, SYMBOLS } from "../shared/gameLogic";
-import { SYMBOLS_HARD } from "../constants";
+import { SYMBOLS_HARD, SYMBOLS_INSANE } from "../constants";
 
 const PENALTY_DURATION = 3000;
 const ARBITRATION_WINDOW_MS = 100;
@@ -403,7 +403,9 @@ export default class SameSnapRoom implements Party.Server {
     // Use appropriate symbol set based on card difficulty
     const symbols = this.config?.cardDifficulty === CardDifficulty.HARD
       ? SYMBOLS_HARD
-      : SYMBOLS;
+      : this.config?.cardDifficulty === CardDifficulty.INSANE
+        ? SYMBOLS_INSANE
+        : SYMBOLS;
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting

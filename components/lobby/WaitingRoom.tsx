@@ -218,7 +218,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
         {isHost && (
           <div className="mb-4">
             <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               <button
                 onClick={() => handleCardDifficultyChange(CardDifficulty.EASY)}
                 className={`py-2 rounded-xl text-sm font-bold transition-all ${
@@ -248,6 +248,16 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                 }`}
               >
                 Hard
+              </button>
+              <button
+                onClick={() => handleCardDifficultyChange(CardDifficulty.INSANE)}
+                className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  cardDifficulty === CardDifficulty.INSANE
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                Insane
               </button>
             </div>
           </div>
@@ -302,7 +312,8 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Card Layout:</span> {
                 roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' :
-                roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' : 'Hard'
+                roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' :
+                roomState.config.cardDifficulty === CardDifficulty.HARD ? 'Hard' : 'Insane'
               }
             </p>
             <p className="text-sm text-gray-500">

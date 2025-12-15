@@ -125,7 +125,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
                 {/* Layout */}
                 <div>
                   <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Card Layout</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <button
                         type="button"
                         onClick={() => setCardDifficulty(CardDifficulty.EASY)}
@@ -158,6 +158,17 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
                         }`}
                     >
                         HARD
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setCardDifficulty(CardDifficulty.INSANE)}
+                        className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                        cardDifficulty === CardDifficulty.INSANE
+                            ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-200'
+                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        }`}
+                    >
+                        INSANE
                     </button>
                   </div>
                 </div>

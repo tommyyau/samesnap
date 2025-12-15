@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty, GameDuration } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
 import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
-import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD } from '../../constants';
+import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD, SYMBOLS_INSANE } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, Zap } from 'lucide-react';
 
@@ -67,8 +67,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
     clearAllBotTimers();
-    // Use hard symbols for HARD card difficulty
-    const symbols = config.cardDifficulty === CardDifficulty.HARD ? SYMBOLS_HARD : undefined;
+    // Use appropriate symbols for card difficulty
+    const symbols = config.cardDifficulty === CardDifficulty.HARD
+      ? SYMBOLS_HARD
+      : config.cardDifficulty === CardDifficulty.INSANE
+        ? SYMBOLS_INSANE
+        : undefined;
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting
