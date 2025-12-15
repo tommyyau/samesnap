@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#6366f1" />
     <title>SameSnap</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -13,6 +17,24 @@
       .no-select {
         user-select: none;
         -webkit-user-select: none;
+      }
+      /* Prevent pull-to-refresh during gameplay */
+      html, body {
+        overscroll-behavior: none;
+        touch-action: manipulation;
+      }
+      /* Safe area utilities for iPhone X+ */
+      .safe-top { padding-top: env(safe-area-inset-top); }
+      .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+      .safe-left { padding-left: env(safe-area-inset-left); }
+      .safe-right { padding-right: env(safe-area-inset-right); }
+      .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+      .safe-y { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+      .safe-all {
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
       }
     </style>
   <script type="importmap">
