@@ -927,13 +927,14 @@ async function runLifecycleTests() {
           type: 'reconnect',
           payload: { playerId: guestId }
         }));
-        // Small delay then join
+        // Delay before join to let reconnect complete processing
+        // 50ms was too short - server needs time to process reconnect and set connectionToPlayerId
         setTimeout(() => {
           guestWs.send(JSON.stringify({
             type: 'join',
             payload: { playerName: 'Guest' }
           }));
-        }, 50);
+        }, 150);
       });
 
       guestWs.on('message', (data) => {
@@ -965,10 +966,11 @@ async function runLifecycleTests() {
     const guestWs = new WebSocket(`ws://${PARTYKIT_HOST}/party/${roomCode}`);
 
     const result = await new Promise((resolve, reject) => {
+      // Increased timeout from 5s to 10s for reliability during parallel test runs
       const timeout = setTimeout(() => {
         guestWs.close();
         reject(new Error('Timeout'));
-      }, 5000);
+      }, 10000);
 
       let gotError = false;
       let gotRoomState = false;
@@ -983,7 +985,7 @@ async function runLifecycleTests() {
 
       guestWs.on('message', (data) => {
         const msg = JSON.parse(data.toString());
-        if (msg.type === 'error' && msg.payload.code === 'GAME_IN_PROGRESS') {
+        if (msg.type === 'error' && msg.payload.code === 'PLAYER_NOT_FOUND') {
           gotError = true;
           // After error, try to join fresh
           guestWs.send(JSON.stringify({

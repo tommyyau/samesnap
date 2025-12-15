@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import usePartySocket from 'partysocket/react';
-import { ClientRoomState, RoomPhase, MultiplayerGameConfig } from '../shared/types';
+import { ClientRoomState, RoomPhase, MultiplayerGameConfig, PlayerStatus } from '../shared/types';
 import { ClientMessage, ServerMessage } from '../shared/protocol';
 
 declare const process: {
@@ -33,7 +33,6 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
   // Track reconnection state to avoid race conditions
   const reconnectPending = useRef(false);
   const fallbackJoinSent = useRef(false);
-  const originalReconnectId = useRef<string | null>(null);
 
   // Read the initial playerId from localStorage for reconnection
   const initialPlayerId = useMemo(() => {
@@ -85,7 +84,6 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
       const sendReconnect = () => {
         // Track that we're waiting for a reconnect response
         reconnectPending.current = true;
-        originalReconnectId.current = playerIdRef.current;
         socket.send(JSON.stringify({ type: 'reconnect', payload: { playerId: playerIdRef.current! } } as ClientMessage));
       };
 
@@ -125,7 +123,6 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
       hasJoined.current = false;
       reconnectPending.current = false;
       fallbackJoinSent.current = false;
-      // Keep originalReconnectId - we might need it for the next reconnect attempt
     },
     onMessage: (event) => {
       const message: ServerMessage = JSON.parse(event.data);
@@ -239,7 +236,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         setRoomState(prev => prev ? {
           ...prev,
           players: prev.players.map(p =>
-            p.id === message.payload.playerId ? { ...p, status: 'disconnected' as const } : p
+            p.id === message.payload.playerId ? { ...p, status: PlayerStatus.DISCONNECTED } : p
           )
         } : null);
         break;
@@ -248,7 +245,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
         setRoomState(prev => prev ? {
           ...prev,
           players: prev.players.map(p =>
-            p.id === message.payload.playerId ? { ...p, status: 'connected' as const } : p
+            p.id === message.payload.playerId ? { ...p, status: PlayerStatus.CONNECTED } : p
           )
         } : null);
         break;
@@ -361,10 +358,10 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
                 : {
                     id: s.playerId,
                     name: s.name,
-                    status: 'connected' as const,
+                    status: PlayerStatus.CONNECTED,
                     cardsRemaining: s.cardsRemaining,
                     isHost: false,
-                    isYou: false
+                    isYou: s.playerId === playerIdRef.current
                   };
             })
           };
@@ -406,7 +403,7 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
 
       case 'error':
         // Handle reconnect failure specifically
-        if (reconnectPending.current && message.payload.code === 'GAME_IN_PROGRESS') {
+        if (reconnectPending.current && (message.payload.code === 'GAME_IN_PROGRESS' || message.payload.code === 'PLAYER_NOT_FOUND')) {
           // Reconnect failed - clear the stale ID
           clearStoredPlayerId();
           reconnectPending.current = false;

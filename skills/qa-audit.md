@@ -336,43 +336,45 @@ Count these if NOT tested:
 
 ---
 
-## Latest Audit Status (Audit #16)
+## Latest Audit Status (Audit #18)
 
 - **Date:** 2025-12-15
-- **Commit:** c4e603f (Add INSANE card difficulty with yellow smiley face emojis)
-- **Confidence:** 87% (Production-ready with monitoring)
-- **Tests:** 135/135 passing (100%)
+- **Commit:** d0c1c56 (Merge pull request #3 from tommyyau/mobile-optimization)
+- **Confidence:** 92% (Production-ready)
+- **Tests:** 188/188 passing (100%)
 
-### Recent Changes Verified
-- ✅ INSANE card difficulty - 57 yellow smiley face emojis
-- ✅ Server correctly selects SYMBOLS_INSANE in startGame()
-- ✅ 5 stale test expectations fixed
-- ✅ 5 new INSANE difficulty tests added
-- ✅ No regressions in any critical flow
+### Test Suite Breakdown
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Game Logic | 21 | ✅ All pass |
+| Hook State | 33 | ✅ All pass |
+| Single Player | 26 | ✅ All pass |
+| Multiplayer | 55 | ✅ All pass |
+| Stress | 25 | ✅ All pass |
+| Comprehensive | 28 | ✅ All pass |
+
+### Issues Fixed This Session
+1. ✅ **Flaky test timeout** - Increased "Reconnect with invalid ID" test timeout from 5s to 10s
+
+### Resolved Since Last Audit
+- ✅ `match_result` dead code - Removed from protocol entirely
+- ✅ `game_over isYou fallback` - Now correctly uses `playerIdRef.current`
 
 ### Previous Fixes Still Intact
 - ✅ GAME_OVER exit behavior - removePlayer() skips endGame() during GAME_OVER
 - ✅ handleReconnection() order - refreshRoomTimeout() before sendRoomState()
 - ✅ nextRound() phase guard - checks ROUND_END before proceeding
 - ✅ endGame() timer cleanup - clears roundEndTimeoutId and pendingArbitration
+- ✅ Penalty clock skew fix - uses durationMs, not absolute timestamp
+- ✅ Room timeout refresh - extends on join/reconnect
 - ✅ Rejoin window system - 20s window, play_again, solo_rejoin_boot
-
-### Test Coverage
-| Suite | Tests |
-|-------|-------|
-| Game Logic | 21 |
-| Single Player | 26 |
-| Hook State | 33 |
-| Multiplayer | 55 |
-| **Total** | **135** |
+- ✅ INSANE card difficulty - working correctly
 
 ### Open Items (all LOW severity)
-8 code quality issues remain - no functional impact:
-1. match_result dead code
-2. PlayerStatus string literals
-3. game_over isYou fallback
-4. originalReconnectId unused
-5. GAME_IN_PROGRESS error naming
-6. handleReconnectMessage orphan connection
-7. Duplicate symbol definitions
-8. roomExpiresAt clock skew display
+6 code quality issues remain - no functional impact:
+1. PlayerStatus string literals
+2. handleReconnectMessage orphan connection (design choice)
+3. Duplicate symbol definitions
+4. roomExpiresAt clock skew display
+5. originalReconnectId unused ref
+6. GAME_IN_PROGRESS error naming

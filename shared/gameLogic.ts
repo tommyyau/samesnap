@@ -1,21 +1,8 @@
 import { CardData, SymbolItem } from './types';
+import { EMOJIS, SYMBOLS } from '../constants';
 
-// We need 57 distinct symbols for a standard order-7 Dobble deck (8 symbols per card)
-export const EMOJIS: string[] = [
-  '🐶', '🐱', '🐭', '🐹', '🐰', '🦊', '🐻', '🐼',
-  '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔',
-  '🐧', '🐦', '🐤', '🦆', '🦅', '🦉', '🦇', '🐺',
-  '🐗', '🐴', '🦄', '🐝', '🐛', '🦋', '🐌', '🐞',
-  '🐜', '🦟', '🦗', '🕷', '🕸', '🐢', '🐍', '🦎',
-  '🦖', '🦕', '🐙', '🦑', '🦐', '🦞', '🦀', '🐡',
-  '🐠', '🐟', '🐬', '🐳', '🦈', '🐊', '🐅', '🐆', '🦓'
-];
-
-export const SYMBOLS: SymbolItem[] = EMOJIS.map((char, index) => ({
-  id: index,
-  char,
-  name: `Symbol ${index}`
-}));
+// Re-export for backwards compatibility with existing imports
+export { EMOJIS, SYMBOLS };
 
 // Generate a deck for Dobble (Projective Plane of Order N)
 // Number of symbols per card = N + 1

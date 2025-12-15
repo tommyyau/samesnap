@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
 import { CardDifficulty, GameDuration, RoomPhase } from '../../shared/types';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
@@ -47,22 +47,35 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
   // Note: Navigation to game is now handled by MultiplayerWrapper in App.tsx
 
-  // Room timeout countdown
+  // Room timeout countdown (clock-skew safe: uses duration instead of timestamp)
+  const expirationReceivedAt = useRef<number | null>(null);
+  const lastExpiresInMs = useRef<number | null>(null);
+
   useEffect(() => {
-    if (!roomState?.roomExpiresAt) {
+    if (roomState?.roomExpiresInMs === undefined) {
       setTimeLeft(null);
+      expirationReceivedAt.current = null;
+      lastExpiresInMs.current = null;
       return;
     }
 
+    // Track when we received this duration (only update if duration changed)
+    if (lastExpiresInMs.current !== roomState.roomExpiresInMs) {
+      expirationReceivedAt.current = Date.now();
+      lastExpiresInMs.current = roomState.roomExpiresInMs;
+    }
+
     const updateTimer = () => {
-      const remaining = Math.max(0, Math.ceil((roomState.roomExpiresAt! - Date.now()) / 1000));
+      if (expirationReceivedAt.current === null || lastExpiresInMs.current === null) return;
+      const elapsed = Date.now() - expirationReceivedAt.current;
+      const remaining = Math.max(0, Math.ceil((lastExpiresInMs.current - elapsed) / 1000));
       setTimeLeft(remaining);
     };
 
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [roomState?.roomExpiresAt]);
+  }, [roomState?.roomExpiresInMs]);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);

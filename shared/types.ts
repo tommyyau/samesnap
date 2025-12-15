@@ -91,7 +91,8 @@ export interface ClientRoomState {
   countdown?: number;
   penaltyUntil?: number;      // Client-side computed: when penalty ends (local clock)
   penaltyRemainingMs?: number; // Server-sent: remaining penalty duration in ms (clock-skew safe)
-  roomExpiresAt?: number;     // Timestamp when room expires (60s timeout)
+  roomExpiresAt?: number;     // DEPRECATED: Timestamp when room expires (use roomExpiresInMs)
+  roomExpiresInMs?: number;   // Duration until room expires in ms (clock-skew safe)
   gameEndReason?: 'stack_emptied' | 'last_player_standing';  // Why the game ended
   rejoinWindowEndsAt?: number; // Timestamp when rejoin window ends (10s after game_over)
   playersWantRematch?: string[]; // IDs of players who clicked "Play Again"

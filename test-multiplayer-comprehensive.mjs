@@ -252,10 +252,11 @@ async function runFullGameTests() {
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
 
-    // Start game immediately
+    // Start game with LONG duration to test full game playthrough
+    // SHORT (10 cards) with 2 players = only 4 cards each, too few rounds
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardDifficulty: 'EASY', gameDuration: 50 } }  // LONG duration
     }));
 
     // Wait for first round
@@ -264,7 +265,7 @@ async function runFullGameTests() {
 
     let roundsPlayed = 0;
     let gameOver = false;
-    const maxRounds = 60; // Safety limit
+    const maxRounds = 60; // Safety limit (LONG = 50 cards, so max ~24 rounds per player)
 
     while (!gameOver && roundsPlayed < maxRounds) {
       // Host finds and clicks match
@@ -449,7 +450,7 @@ async function runRoundTransitionTests() {
     cleanup(host, guest);
   });
 
-  await test('Winner gets new card (old center) after winning', async () => {
+  await test('Winner\'s played card becomes new center after winning', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -473,10 +474,21 @@ async function runRoundTransitionTests() {
     await waitForMessage(host, 'round_winner', 3000);
     const round2 = await waitForMessage(host, 'round_start', 5000);
     const hostCard2Id = round2.payload.yourCard.id;
+    const centerCard2Id = round2.payload.centerCard.id;
 
-    // Winner's new card should be the OLD center card
-    if (hostCard2Id !== centerCard1Id) {
-      throw new Error(`Winner should get old center card. Expected ${centerCard1Id}, got ${hostCard2Id}`);
+    // Game mechanics: Winner's played card (hostCard1) becomes the new center
+    // Winner's next card from stack becomes their new card (hostCard2)
+    // The old center card is replaced (discarded)
+    if (centerCard2Id !== hostCard1Id) {
+      throw new Error(`Winner's old card should become new center. Expected center=${hostCard1Id}, got ${centerCard2Id}`);
+    }
+
+    // Winner's new card should be different from both their old card and old center
+    if (hostCard2Id === hostCard1Id) {
+      throw new Error(`Winner's new card should be different from their old card`);
+    }
+    if (hostCard2Id === centerCard1Id) {
+      throw new Error(`Winner's new card should NOT be the old center (that card is discarded)`);
     }
 
     cleanup(host, guest);

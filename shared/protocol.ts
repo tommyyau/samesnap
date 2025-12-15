@@ -30,7 +30,6 @@ export type ServerMessage =
   | { type: 'round_start'; payload: { centerCard: CardData; yourCard: CardData; yourCardsRemaining: number; allPlayersRemaining: { playerId: string; cardsRemaining: number }[]; roundNumber: number } }
   | { type: 'round_winner'; payload: { winnerId: string; winnerName: string; matchedSymbolId: number; winnerCardsRemaining: number } }
   | { type: 'game_over'; payload: { winnerId: string; winnerName: string; finalStandings: { playerId: string; name: string; cardsRemaining: number }[]; reason?: 'stack_emptied' | 'last_player_standing'; rejoinWindowMs?: number } }
-  | { type: 'match_result'; payload: { success: boolean; reason?: string } }
   | { type: 'penalty'; payload: { serverTimestamp: number; durationMs: number; reason: string } }
   | { type: 'room_expired'; payload: { reason: string } }  // Room timed out
   | { type: 'host_changed'; payload: { playerId: string } }
@@ -49,6 +48,7 @@ export const ERROR_CODES = {
   ROOM_FULL: 'ROOM_FULL',
   ROOM_NOT_FOUND: 'ROOM_NOT_FOUND',
   GAME_IN_PROGRESS: 'GAME_IN_PROGRESS',
+  PLAYER_NOT_FOUND: 'PLAYER_NOT_FOUND',
   NOT_HOST: 'NOT_HOST',
   INVALID_STATE: 'INVALID_STATE',
   INVALID_MATCH: 'INVALID_MATCH',

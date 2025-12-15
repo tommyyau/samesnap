@@ -991,9 +991,10 @@ export default class SameSnapRoom implements Party.Server {
       }
     } else {
       // Unknown player ID - reject with error
+      // Note: Don't close connection - client may send fresh join to recover
       conn.send(JSON.stringify({
         type: 'error',
-        payload: { code: ERROR_CODES.GAME_IN_PROGRESS, message: 'Cannot reconnect - player not found or session expired' }
+        payload: { code: ERROR_CODES.PLAYER_NOT_FOUND, message: 'Cannot reconnect - player not found or session expired' }
       }));
     }
   }
@@ -1057,6 +1058,7 @@ export default class SameSnapRoom implements Party.Server {
       roundMatchedSymbolId: this.roundMatchedSymbolId,
       penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
+      roomExpiresInMs: this.roomExpiresAt ? Math.max(0, this.roomExpiresAt - Date.now()) : undefined,
       gameEndReason: this.phase === RoomPhase.GAME_OVER ? this.lastGameEndReason : undefined,
       rejoinWindowEndsAt: this.rejoinWindowEndsAt || undefined,
       playersWantRematch: this.playersWantRematch.size > 0 ? Array.from(this.playersWantRematch) : undefined,
