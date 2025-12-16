@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Difficulty, GameConfig, CardDifficulty, GameDuration } from '../../shared/types';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 import { ArrowLeft } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
 interface SinglePlayerLobbyProps {
   onStart: (config: GameConfig) => void;
@@ -9,7 +10,15 @@ interface SinglePlayerLobbyProps {
 }
 
 const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }) => {
+  const { user, isSignedIn } = useUser();
   const [name, setName] = useState('');
+
+  // Pre-fill player name from Clerk user's first name
+  useEffect(() => {
+    if (isSignedIn && user && user.firstName) {
+      setName(user.firstName);
+    }
+  }, [isSignedIn, user]);
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users, User, ArrowRight } from 'lucide-react';
+import { useUser } from '@clerk/clerk-react';
 
 interface MainMenuProps {
   onSinglePlayer: () => void;
@@ -8,9 +9,17 @@ interface MainMenuProps {
 }
 
 const MainMenu: React.FC<MainMenuProps> = ({ onSinglePlayer, onCreateRoom, onJoinRoom }) => {
+  const { user, isSignedIn } = useUser();
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
   const [playerName, setPlayerName] = useState('');
   const [roomCode, setRoomCode] = useState('');
+
+  // Pre-fill player name from Clerk user's first name (read-only, doesn't modify profile)
+  useEffect(() => {
+    if (isSignedIn && user && user.firstName) {
+      setPlayerName(user.firstName);
+    }
+  }, [isSignedIn, user]);
 
   const handleCreate = () => {
     if (playerName.trim()) {

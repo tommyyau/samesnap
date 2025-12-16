@@ -1,5 +1,12 @@
 import React, { useState, useCallback } from 'react';
 import { Analytics } from '@vercel/analytics/react';
+import {
+  SignedIn,
+  SignedOut,
+  SignInButton,
+  SignUpButton,
+  UserButton,
+} from '@clerk/clerk-react';
 import MainMenu from './components/lobby/MainMenu';
 import SinglePlayerLobby from './components/lobby/SinglePlayerLobby';
 import SinglePlayerGame from './components/game/SinglePlayerGame';
@@ -153,6 +160,32 @@ function App() {
     <ErrorBoundary>
       <Analytics />
       <div className="min-h-screen">
+        {/* Show auth header only on non-game screens */}
+        {(mode === AppMode.MENU || mode === AppMode.SINGLE_PLAYER_LOBBY || mode === AppMode.MULTIPLAYER_WAITING) && (
+          <header className="fixed top-4 right-4 z-50 flex items-center gap-2">
+            <SignedOut>
+              <SignInButton>
+                <button className="px-4 py-2 text-white bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors">
+                  Sign in
+                </button>
+              </SignInButton>
+              <SignUpButton>
+                <button className="px-4 py-2 text-white bg-white/20 hover:bg-white/30 rounded-lg font-medium transition-colors">
+                  Sign up
+                </button>
+              </SignUpButton>
+            </SignedOut>
+            <SignedIn>
+              <UserButton
+                appearance={{
+                  elements: {
+                    avatarBox: 'w-8 h-8',
+                  },
+                }}
+              />
+            </SignedIn>
+          </header>
+        )}
         {mode === AppMode.MENU && (
           <MainMenu
             onSinglePlayer={handleSinglePlayer}

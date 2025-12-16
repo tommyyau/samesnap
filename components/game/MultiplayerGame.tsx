@@ -4,6 +4,7 @@ import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
 import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import Card from '../Card';
 import { Trophy, XCircle, Zap, Wifi, AlertCircle } from 'lucide-react';
+import { SignedIn, UserButton } from '@clerk/clerk-react';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -400,9 +401,14 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
           </div>
         </div>
 
-        <div className={`px-3 py-1 rounded-lg flex items-center gap-2 ${isPenaltyActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
-          {isPenaltyActive ? <XCircle size={16}/> : <Zap size={16}/>}
-          <span className="font-bold text-sm">{isPenaltyActive ? `WAIT ${penaltyTimeLeft}s` : 'READY'}</span>
+        <div className="flex items-center gap-2">
+          <div className={`px-3 py-1 rounded-lg flex items-center gap-2 ${isPenaltyActive ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-700'}`}>
+            {isPenaltyActive ? <XCircle size={16}/> : <Zap size={16}/>}
+            <span className="font-bold text-sm">{isPenaltyActive ? `WAIT ${penaltyTimeLeft}s` : 'READY'}</span>
+          </div>
+          <SignedIn>
+            <UserButton appearance={{ elements: { avatarBox: 'w-6 h-6' } }} />
+          </SignedIn>
         </div>
       </div>
 

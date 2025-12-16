@@ -5,6 +5,7 @@ import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSou
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD, SYMBOLS_INSANE } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, Zap } from 'lucide-react';
+import { SignedIn, UserButton } from '@clerk/clerk-react';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -439,6 +440,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                  {isPenaltyActive ? <XCircle size={16}/> : <Zap size={16}/>}
                  <span className="font-bold text-xs md:text-sm">{isPenaltyActive ? `WAIT ${timeLeft}s` : 'READY'}</span>
               </div>
+              <SignedIn>
+                <UserButton appearance={{ elements: { avatarBox: 'w-6 h-6' } }} />
+              </SignedIn>
           </div>
         </div>
 
