@@ -11,9 +11,9 @@ export const BUILT_IN_CARD_SETS: CardSet[] = [
     isBuiltIn: true,
   },
   {
-    id: 'mixed',
-    name: 'Mixed',
-    description: 'Themed groups of fruits, creatures, weather, and more',
+    id: 'christmas',
+    name: 'Christmas',
+    description: 'Festive holiday themed symbols',
     symbols: SYMBOLS_HARD,
     isBuiltIn: true,
   },

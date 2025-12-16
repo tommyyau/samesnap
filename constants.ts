@@ -26,24 +26,24 @@ export const SYMBOLS: SymbolItem[] = EMOJIS.map((char, index) => ({
   name: `Symbol ${index}`
 }));
 
-// Hard mode emojis - visually similar symbols grouped by theme
+// Christmas themed emojis
 export const EMOJIS_HARD: string[] = [
-  // Fruits (similar colors, different shapes)
-  '🍎', '🍓', '🍒', '🍉', '🍇', '🫐', '🍊', '🍋',
-  // Sea creatures (same theme, distinct shapes)
-  '🐙', '🦑', '🦐', '🦀', '🐚', '🐠', '🐡', '🦈',
-  // Insects & small creatures
-  '🐝', '🦋', '🐞', '🐜', '🐌', '🦂', '🕷️', '🪲',
-  // Weather & sky
-  '☀️', '🌙', '⭐', '☁️', '🌧️', '❄️', '🌪️', '🌈',
-  // Musical & entertainment
-  '🎸', '🎺', '🎷', '🥁', '🎹', '🎤', '🎧', '🎬',
-  // Tools & objects
-  '🔨', '🔧', '✂️', '📎', '🔑', '🔒', '💡', '🔔',
-  // Food items (varied)
-  '🍕', '🌮', '🍔', '🌭', '🍟', '🧁', '🍩',
-  // Bonus to reach 57
-  '⚡', '💎'
+  // Animals (35)
+  '🐶', '🐱', '🐭', '🐰', '🦊', '🐻', '🐼', '🐨',
+  '🐯', '🦁', '🐮', '🐷', '🐸', '🐵', '🐔', '🐧',
+  '🐤', '🦆', '🦉', '🐴', '🦄', '🐝', '🦋', '🐞',
+  '🐢', '🐬', '🐳', '🦈', '🚒', '🧸', '🦒', '🐑',
+  '🐿️', '🐙', '🦖',
+  // Food (7)
+  '🍎', '🍌', '🍓', '🍉', '🍕', '🍦', '🍪',
+  // Celebration (3)
+  '🎈', '🎁', '🎂',
+  // Nature & Sky (3)
+  '⭐', '🌈', '🌙',
+  // Transport & Objects (7)
+  '🚀', '⚽', '🏀', '✈️', '🚗', '🚌', '🏠',
+  // Fun (2)
+  '🎮', '❤️',
 ];
 
 export const SYMBOLS_HARD: SymbolItem[] = EMOJIS_HARD.map((char, index) => ({
