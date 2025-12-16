@@ -1,3 +1,4 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { kv } from '@vercel/kv';
 import { verifyToken } from '@clerk/backend';
 
@@ -12,17 +13,9 @@ interface StoredCardSet {
 
 const MAX_CARD_SETS = 10;
 
-// Helper for JSON responses (compatible with older TS)
-function jsonResponse(data: unknown, status = 200): Response {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 // Helper to get userId from Clerk JWT
-async function getUserId(request: Request): Promise<string | null> {
-  const authHeader = request.headers.get('Authorization');
+async function getUserId(req: VercelRequest): Promise<string | null> {
+  const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
     console.error('No Authorization header or not Bearer token');
     return null;
@@ -54,42 +47,41 @@ function generateId(): string {
 }
 
 // GET /api/cardsets - List user's card sets
-async function handleGet(request: Request): Promise<Response> {
-  const userId = await getUserId(request);
+async function handleGet(req: VercelRequest, res: VercelResponse) {
+  const userId = await getUserId(req);
   if (!userId) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
     const sets = await kv.get<StoredCardSet[]>(`cardsets:${userId}`) || [];
-    return jsonResponse({ cardSets: sets });
+    return res.status(200).json({ cardSets: sets });
   } catch (error) {
     console.error('Failed to fetch card sets:', error);
-    return jsonResponse({ error: 'Failed to fetch card sets' }, 500);
+    return res.status(500).json({ error: 'Failed to fetch card sets' });
   }
 }
 
 // POST /api/cardsets - Create new card set
-async function handlePost(request: Request): Promise<Response> {
-  const userId = await getUserId(request);
+async function handlePost(req: VercelRequest, res: VercelResponse) {
+  const userId = await getUserId(req);
   if (!userId) {
-    return jsonResponse({ error: 'Unauthorized' }, 401);
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   try {
-    const body = await request.json();
-    const { name, symbols } = body;
+    const { name, symbols } = req.body;
 
     // Validate
     if (!name?.trim()) {
-      return jsonResponse({ error: 'Name is required' }, 400);
+      return res.status(400).json({ error: 'Name is required' });
     }
     if (!Array.isArray(symbols) || symbols.length !== 57) {
-      return jsonResponse({ error: 'Must have exactly 57 symbols' }, 400);
+      return res.status(400).json({ error: 'Must have exactly 57 symbols' });
     }
     const uniqueSymbols = new Set(symbols);
     if (uniqueSymbols.size !== 57) {
-      return jsonResponse({ error: 'Symbols must be unique' }, 400);
+      return res.status(400).json({ error: 'Symbols must be unique' });
     }
 
     // Get existing sets
@@ -97,7 +89,7 @@ async function handlePost(request: Request): Promise<Response> {
 
     // Check limit
     if (existingSets.length >= MAX_CARD_SETS) {
-      return jsonResponse({ error: `Maximum ${MAX_CARD_SETS} card sets allowed` }, 400);
+      return res.status(400).json({ error: `Maximum ${MAX_CARD_SETS} card sets allowed` });
     }
 
     // Create new set
@@ -112,49 +104,31 @@ async function handlePost(request: Request): Promise<Response> {
     // Save
     await kv.set(`cardsets:${userId}`, [...existingSets, newSet]);
 
-    return jsonResponse({ cardSet: newSet }, 201);
+    return res.status(201).json({ cardSet: newSet });
   } catch (error) {
     console.error('Failed to create card set:', error);
-    return jsonResponse({ error: 'Failed to create card set' }, 500);
+    return res.status(500).json({ error: 'Failed to create card set' });
   }
 }
 
 // Main handler
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   // Handle CORS preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
   }
 
-  let response: Response;
-
-  switch (request.method) {
+  switch (req.method) {
     case 'GET':
-      response = await handleGet(request);
-      break;
+      return handleGet(req, res);
     case 'POST':
-      response = await handlePost(request);
-      break;
+      return handlePost(req, res);
     default:
-      response = jsonResponse({ error: 'Method not allowed' }, 405);
+      return res.status(405).json({ error: 'Method not allowed' });
   }
-
-  // Add CORS headers to response
-  const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', '*');
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  });
 }
-
-// Note: Using Node.js runtime because @clerk/backend requires crypto modules not available in Edge
