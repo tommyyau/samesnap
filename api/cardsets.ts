@@ -157,6 +157,4 @@ export default async function handler(request: Request): Promise<Response> {
   });
 }
 
-export const config = {
-  runtime: 'edge',
-};
+// Note: Using Node.js runtime because @clerk/backend requires crypto modules not available in Edge
