@@ -341,6 +341,9 @@ export default class SameSnapRoom implements Party.Server {
       cardLayout: config.cardLayout,
       cardSetId: config.cardSetId,
       gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.SHORT,
+      // Include custom symbols if provided (for custom card sets)
+      customSymbols: config.customSymbols,
+      customSetName: config.customSetName,
     };
     this.startCountdown();
   }
