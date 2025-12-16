@@ -128,7 +128,7 @@ function App() {
   const [editingCardSet, setEditingCardSet] = useState<CardSet | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const { customSets, isLoading: isLoadingCardSets, createSet, updateSet, deleteSet } = useCustomCardSets();
+  const { customSets, isLoading: isLoadingCardSets, canCreate, createSet, updateSet, deleteSet } = useCustomCardSets();
 
   const handleSinglePlayer = () => {
     setMode(AppMode.SINGLE_PLAYER_LOBBY);
@@ -280,7 +280,7 @@ function App() {
             onEditCardSet={handleEditCardSet}
             customSets={customSets}
             isLoadingCardSets={isLoadingCardSets}
-            canCreate={customSets.length < 10}
+            canCreate={canCreate}
             onDeleteCardSet={deleteSet}
           />
         )}
