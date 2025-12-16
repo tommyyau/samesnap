@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
 import { CardLayout, GameDuration, RoomPhase, PlayerStatus } from '../../shared/types';
-import { BUILT_IN_CARD_SETS, DEFAULT_CARD_SET_ID, getCardSetById } from '../../shared/cardSets';
+import { BUILT_IN_CARD_SETS, getAllCardSets, DEFAULT_CARD_SET_ID, getCardSetById } from '../../shared/cardSets';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 
@@ -273,23 +273,32 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           <div className="mb-4">
             <p className="text-sm font-bold text-gray-700 mb-2">Card Set</p>
             <div className="grid grid-cols-3 gap-2">
-              {BUILT_IN_CARD_SETS.map(cardSet => (
+              {getAllCardSets().map(cardSet => (
                 <button
                   key={cardSet.id}
                   onClick={() => handleCardSetChange(cardSet.id)}
-                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                  className={`py-2 rounded-xl text-sm font-bold transition-all relative ${
                     cardSetId === cardSet.id
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
+                  title={!cardSet.isBuiltIn ? 'Custom sets work in single-player only (for now)' : undefined}
                 >
                   <div>{cardSet.name}</div>
                   <div className="text-base mt-1">
                     {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
                   </div>
+                  {!cardSet.isBuiltIn && (
+                    <span className="absolute top-1 right-1 text-[8px] bg-yellow-400 text-yellow-900 px-1 rounded">
+                      SP
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
+            <p className="text-xs text-gray-400 mt-1 text-center">
+              Sets marked "SP" work in single-player only
+            </p>
           </div>
         )}
 

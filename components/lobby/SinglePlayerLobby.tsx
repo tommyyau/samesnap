@@ -1,18 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Difficulty, GameConfig, CardLayout, GameDuration } from '../../shared/types';
-import { BUILT_IN_CARD_SETS, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
+import { Difficulty, GameConfig, CardLayout, GameDuration, CardSet } from '../../shared/types';
+import { getAllCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
+import { useCustomCardSets } from '../../hooks/useCustomCardSets';
 
 interface SinglePlayerLobbyProps {
   onStart: (config: GameConfig) => void;
   onBack: () => void;
+  onCreateCardSet?: () => void;
+  onEditCardSet?: (cardSet: CardSet) => void;
 }
 
-const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }) => {
+const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
+  onStart,
+  onBack,
+  onCreateCardSet,
+  onEditCardSet,
+}) => {
   const { user, isSignedIn } = useUser();
   const [name, setName] = useState('');
+  const { customSets, deleteSet, refresh: refreshCustomSets } = useCustomCardSets();
+
+  // Get all card sets (built-in + custom)
+  const allCardSets = getAllCardSets();
 
   // Pre-fill player name from Clerk user's first name
   useEffect(() => {
@@ -20,11 +32,29 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
       setName(user.firstName);
     }
   }, [isSignedIn, user]);
+
+  // Refresh custom sets when component mounts (in case they were edited externally)
+  useEffect(() => {
+    refreshCustomSets();
+  }, [refreshCustomSets]);
+
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
+
+  // Handle deleting a custom card set
+  const handleDeleteCardSet = (setId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('Delete this card set?')) {
+      deleteSet(setId);
+      // If the deleted set was selected, switch to default
+      if (cardSetId === setId) {
+        setCardSetId(DEFAULT_CARD_SET_ID);
+      }
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,12 +198,12 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
               <div className="sm:col-span-2">
                 <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Card Set</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {BUILT_IN_CARD_SETS.map(cardSet => (
+                  {allCardSets.map(cardSet => (
                     <button
                       key={cardSet.id}
                       type="button"
                       onClick={() => setCardSetId(cardSet.id)}
-                      className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                      className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center relative group ${
                         cardSetId === cardSet.id
                           ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-200'
                           : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -183,8 +213,43 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
                       <div className="text-lg mt-1">
                         {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
                       </div>
+                      {/* Edit/Delete buttons for custom sets */}
+                      {!cardSet.isBuiltIn && onEditCardSet && (
+                        <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditCardSet(cardSet);
+                            }}
+                            className="p-1 bg-white/90 hover:bg-white rounded text-gray-600 hover:text-indigo-600"
+                            title="Edit"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCardSet(cardSet.id, e)}
+                            className="p-1 bg-white/90 hover:bg-white rounded text-gray-600 hover:text-red-600"
+                            title="Delete"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      )}
                     </button>
                   ))}
+                  {/* Create New Card Set Button */}
+                  {onCreateCardSet && (
+                    <button
+                      type="button"
+                      onClick={onCreateCardSet}
+                      className="py-2 px-1 rounded-lg text-xs font-bold transition-all text-center bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600 border-2 border-dashed border-gray-300 hover:border-indigo-400 flex flex-col items-center justify-center"
+                    >
+                      <Plus size={20} className="mb-1" />
+                      <div>Create New</div>
+                    </button>
+                  )}
                 </div>
               </div>
 

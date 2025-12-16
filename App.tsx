@@ -12,9 +12,11 @@ import SinglePlayerLobby from './components/lobby/SinglePlayerLobby';
 import SinglePlayerGame from './components/game/SinglePlayerGame';
 import WaitingRoom from './components/lobby/WaitingRoom';
 import MultiplayerGame from './components/game/MultiplayerGame';
+import CardSetEditor from './components/cardset/CardSetEditor';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { GameConfig, RoomPhase } from './shared/types';
+import { GameConfig, RoomPhase, CardSet } from './shared/types';
 import { generateRoomCode, useMultiplayerGame } from './hooks/useMultiplayerGame';
+import { useCustomCardSets } from './hooks/useCustomCardSets';
 
 enum AppMode {
   MENU = 'menu',
@@ -22,6 +24,7 @@ enum AppMode {
   SINGLE_PLAYER_GAME = 'sp_game',
   MULTIPLAYER_WAITING = 'mp_waiting',
   MULTIPLAYER_GAME = 'mp_game',
+  CARD_SET_EDITOR = 'cardset_editor',
 }
 
 // Wrapper component for multiplayer that holds the connection
@@ -121,10 +124,48 @@ function App() {
     roomCode: string;
     playerName: string;
   } | null>(null);
+  const [editingCardSet, setEditingCardSet] = useState<CardSet | null>(null);
+  const { createSet, updateSet, deleteSet } = useCustomCardSets();
 
   const handleSinglePlayer = () => {
     setMode(AppMode.SINGLE_PLAYER_LOBBY);
   };
+
+  // Card Set Editor handlers
+  const handleCreateCardSet = useCallback(() => {
+    setEditingCardSet(null); // null means creating new
+    setMode(AppMode.CARD_SET_EDITOR);
+  }, []);
+
+  const handleEditCardSet = useCallback((cardSet: CardSet) => {
+    setEditingCardSet(cardSet);
+    setMode(AppMode.CARD_SET_EDITOR);
+  }, []);
+
+  const handleSaveCardSet = useCallback((name: string, symbols: string[]) => {
+    if (editingCardSet) {
+      // Editing existing
+      updateSet(editingCardSet.id, name, symbols);
+    } else {
+      // Creating new
+      createSet(name, symbols);
+    }
+    setEditingCardSet(null);
+    setMode(AppMode.SINGLE_PLAYER_LOBBY);
+  }, [editingCardSet, createSet, updateSet]);
+
+  const handleDeleteCardSet = useCallback(() => {
+    if (editingCardSet) {
+      deleteSet(editingCardSet.id);
+      setEditingCardSet(null);
+      setMode(AppMode.SINGLE_PLAYER_LOBBY);
+    }
+  }, [editingCardSet, deleteSet]);
+
+  const handleCancelCardSetEditor = useCallback(() => {
+    setEditingCardSet(null);
+    setMode(AppMode.SINGLE_PLAYER_LOBBY);
+  }, []);
 
   const handleCreateRoom = (playerName: string) => {
     const roomCode = generateRoomCode();
@@ -161,7 +202,7 @@ function App() {
       <Analytics />
       <div className="min-h-screen">
         {/* Show auth header only on non-game screens */}
-        {(mode === AppMode.MENU || mode === AppMode.SINGLE_PLAYER_LOBBY || mode === AppMode.MULTIPLAYER_WAITING) && (
+        {(mode === AppMode.MENU || mode === AppMode.SINGLE_PLAYER_LOBBY || mode === AppMode.MULTIPLAYER_WAITING || mode === AppMode.CARD_SET_EDITOR) && (
           <header className="fixed top-4 right-4 z-50 flex items-center gap-2">
             <SignedOut>
               <SignInButton>
@@ -198,6 +239,17 @@ function App() {
           <SinglePlayerLobby
             onStart={handleStartSinglePlayer}
             onBack={handleBackToMenu}
+            onCreateCardSet={handleCreateCardSet}
+            onEditCardSet={handleEditCardSet}
+          />
+        )}
+
+        {mode === AppMode.CARD_SET_EDITOR && (
+          <CardSetEditor
+            existingSet={editingCardSet || undefined}
+            onSave={handleSaveCardSet}
+            onCancel={handleCancelCardSetEditor}
+            onDelete={editingCardSet ? handleDeleteCardSet : undefined}
           />
         )}
 
