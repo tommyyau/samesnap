@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { CardData, SymbolItem, CardDifficulty } from '../types';
+import { CardData, SymbolItem, CardLayout } from '../types';
 
 // Seeded random number generator - ensures same card always has same layout
 function seededRandom(seed: number): () => number {
@@ -16,7 +16,7 @@ interface CardProps {
   disabled?: boolean;
   highlightError?: boolean;
   highlightSymbolId?: number | null; // ID of the symbol to flash
-  layoutMode?: CardDifficulty;
+  layoutMode?: CardLayout;
   className?: string;
   interactive?: boolean;
   label?: string; // Curved text on card circumference
@@ -29,7 +29,7 @@ const Card: React.FC<CardProps> = ({
   disabled = false,
   highlightError = false,
   highlightSymbolId = null,
-  layoutMode = CardDifficulty.EASY,
+  layoutMode = CardLayout.ORDERLY,
   className = '',
   interactive = true,
   label
@@ -40,7 +40,7 @@ const Card: React.FC<CardProps> = ({
     // Create seeded random based on card ID for consistent layout
     const random = seededRandom(card.id);
 
-    if (layoutMode === CardDifficulty.EASY) {
+    if (layoutMode === CardLayout.ORDERLY) {
       // ORDERLY LAYOUT: 1 in center, rest in a circle
       return card.symbols.map((symbol, index) => {
         if (index === 0) {

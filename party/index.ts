@@ -2,11 +2,11 @@ import type * as Party from "partykit/server";
 import {
   RoomPhase, PlayerStatus, ServerPlayer, ClientPlayer,
   ClientRoomState, CardData, MultiplayerGameConfig, MatchAttempt,
-  CardDifficulty, GameDuration
+  CardLayout, GameDuration
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
-import { generateDeck, SYMBOLS } from "../shared/gameLogic";
-import { SYMBOLS_HARD, SYMBOLS_INSANE } from "../constants";
+import { generateDeck } from "../shared/gameLogic";
+import { getSymbolsForCardSet, DEFAULT_CARD_SET_ID } from "../shared/cardSets";
 
 const PENALTY_DURATION = 3000;
 const ARBITRATION_WINDOW_MS = 100;
@@ -218,7 +218,8 @@ export default class SameSnapRoom implements Party.Server {
 
       // Initialize default config
       this.config = {
-        cardDifficulty: CardDifficulty.EASY,
+        cardLayout: CardLayout.ORDERLY,
+        cardSetId: DEFAULT_CARD_SET_ID,
         gameDuration: GameDuration.SHORT,
       };
 
@@ -301,7 +302,8 @@ export default class SameSnapRoom implements Party.Server {
 
     // Merge with defaults to ensure backward compatibility
     this.config = {
-      cardDifficulty: config.cardDifficulty,
+      cardLayout: config.cardLayout,
+      cardSetId: config.cardSetId,
       gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.SHORT,
     };
 
@@ -335,7 +337,8 @@ export default class SameSnapRoom implements Party.Server {
 
     // Merge with defaults to ensure backward compatibility
     this.config = {
-      cardDifficulty: config.cardDifficulty,
+      cardLayout: config.cardLayout,
+      cardSetId: config.cardSetId,
       gameDuration: config.gameDuration ?? this.config?.gameDuration ?? GameDuration.SHORT,
     };
     this.startCountdown();
@@ -400,12 +403,9 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private startGame() {
-    // Use appropriate symbol set based on card difficulty
-    const symbols = this.config?.cardDifficulty === CardDifficulty.HARD
-      ? SYMBOLS_HARD
-      : this.config?.cardDifficulty === CardDifficulty.INSANE
-        ? SYMBOLS_INSANE
-        : SYMBOLS;
+    // Get symbols for the selected card set
+    const cardSetId = this.config?.cardSetId ?? DEFAULT_CARD_SET_ID;
+    const symbols = getSymbolsForCardSet(cardSetId);
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting

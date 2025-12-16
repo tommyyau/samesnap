@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameConfig, Player, CardData, SymbolItem, GameState, CardDifficulty, GameDuration } from '../../shared/types';
+import { GameConfig, Player, CardData, SymbolItem, GameState, GameDuration } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
+import { getSymbolsForCardSet } from '../../shared/cardSets';
 import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
-import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES, SYMBOLS_HARD, SYMBOLS_INSANE } from '../../constants';
+import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, Zap } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
@@ -91,12 +92,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
     clearAllBotTimers();
-    // Use appropriate symbols for card difficulty
-    const symbols = config.cardDifficulty === CardDifficulty.HARD
-      ? SYMBOLS_HARD
-      : config.cardDifficulty === CardDifficulty.INSANE
-        ? SYMBOLS_INSANE
-        : undefined;
+    // Get symbols for the selected card set
+    const symbols = getSymbolsForCardSet(config.cardSetId);
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting
@@ -471,7 +468,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                      <Card
                        card={bot.cardStack[0]}
                        size={lastWinnerId === bot.id && isAnimating ? botCardSize * 1.5 : botCardSize}
-                       layoutMode={config.cardDifficulty}
+                       layoutMode={config.cardLayout}
                        highlightSymbolId={lastWinnerId === bot.id && isAnimating ? matchedSymbolId : null}
                        disabled
                        className={lastWinnerId === bot.id && isAnimating ? "bg-yellow-50 ring-4 ring-yellow-400" : "bg-gray-50"}
@@ -496,7 +493,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                  <Card
                    card={humanPlayer.cardStack[0]}
                    size={cardSize}
-                   layoutMode={config.cardDifficulty}
+                   layoutMode={config.cardLayout}
                    onClickSymbol={handlePlayerClick}
                    disabled={isPenaltyActive || isAnimating}
                    highlightError={isPenaltyActive}
@@ -525,7 +522,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
                  <Card
                    card={centerCard}
                    size={cardSize}
-                   layoutMode={config.cardDifficulty}
+                   layoutMode={config.cardLayout}
                    highlightSymbolId={matchedSymbolId}
                    disabled={isPenaltyActive || isAnimating}
                    className="z-10 relative"

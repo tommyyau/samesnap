@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
-import { RoomPhase, SymbolItem, CardDifficulty } from '../../shared/types';
+import { RoomPhase, SymbolItem, CardLayout } from '../../shared/types';
 import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import Card from '../Card';
 import { Trophy, XCircle, Zap, Wifi, AlertCircle } from 'lucide-react';
@@ -442,7 +442,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               <Card
                 card={roomState.yourCard}
                 size={cardSize}
-                layoutMode={roomState.config?.cardDifficulty || CardDifficulty.EASY}
+                layoutMode={roomState.config?.cardLayout || CardLayout.ORDERLY}
                 onClickSymbol={handleSymbolClick}
                 disabled={isPenaltyActive || isAnimating}
                 highlightError={isPenaltyActive}
@@ -468,7 +468,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               <Card
                 card={roomState.centerCard}
                 size={cardSize}
-                layoutMode={roomState.config?.cardDifficulty || CardDifficulty.EASY}
+                layoutMode={roomState.config?.cardLayout || CardLayout.ORDERLY}
                 highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
                 disabled={true}
                 interactive={false}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Difficulty, GameConfig, CardDifficulty, GameDuration } from '../../shared/types';
+import { Difficulty, GameConfig, CardLayout, GameDuration } from '../../shared/types';
+import { BUILT_IN_CARD_SETS, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 import { ArrowLeft } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
@@ -21,7 +22,8 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
   }, [isSignedIn, user]);
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
-  const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
+  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
+  const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -35,7 +37,8 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
       playerName: name.trim() || 'Player 1',
       botCount,
       difficulty,
-      cardDifficulty,
+      cardLayout,
+      cardSetId,
       gameDuration
     });
   };
@@ -131,55 +134,57 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({ onStart, onBack }
                     </div>
                 </div>
 
-                {/* Layout */}
+                {/* Card Layout */}
                 <div>
                   <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Card Layout</label>
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                         type="button"
-                        onClick={() => setCardDifficulty(CardDifficulty.EASY)}
+                        onClick={() => setCardLayout(CardLayout.ORDERLY)}
                         className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
-                        cardDifficulty === CardDifficulty.EASY
+                        cardLayout === CardLayout.ORDERLY
                             ? 'bg-blue-500 text-white shadow-md ring-2 ring-blue-200'
                             : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}
                     >
-                        EASY
+                        ORDERLY
                     </button>
                     <button
                         type="button"
-                        onClick={() => setCardDifficulty(CardDifficulty.MEDIUM)}
+                        onClick={() => setCardLayout(CardLayout.CHAOTIC)}
                         className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
-                        cardDifficulty === CardDifficulty.MEDIUM
+                        cardLayout === CardLayout.CHAOTIC
                             ? 'bg-orange-500 text-white shadow-md ring-2 ring-orange-200'
                             : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         }`}
                     >
-                        MEDIUM
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setCardDifficulty(CardDifficulty.HARD)}
-                        className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
-                        cardDifficulty === CardDifficulty.HARD
-                            ? 'bg-red-500 text-white shadow-md ring-2 ring-red-200'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                    >
-                        HARD
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setCardDifficulty(CardDifficulty.INSANE)}
-                        className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
-                        cardDifficulty === CardDifficulty.INSANE
-                            ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-200'
-                            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                        }`}
-                    >
-                        INSANE
+                        CHAOTIC
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Card Set - Full Width Below */}
+              <div className="sm:col-span-2">
+                <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Card Set</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {BUILT_IN_CARD_SETS.map(cardSet => (
+                    <button
+                      key={cardSet.id}
+                      type="button"
+                      onClick={() => setCardSetId(cardSet.id)}
+                      className={`py-2 px-1 rounded-lg text-xs font-bold transition-all text-center ${
+                        cardSetId === cardSet.id
+                          ? 'bg-purple-600 text-white shadow-md ring-2 ring-purple-200'
+                          : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      <div>{cardSet.name}</div>
+                      <div className="text-lg mt-1">
+                        {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
+                      </div>
+                    </button>
+                  ))}
                 </div>
               </div>
 

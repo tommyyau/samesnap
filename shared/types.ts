@@ -14,11 +14,28 @@ export interface CardData {
   symbols: SymbolItem[];
 }
 
+// DEPRECATED: Use CardLayout + CardSet instead
+// Kept temporarily for backwards compatibility during migration
 export enum CardDifficulty {
   EASY = 'EASY',
   MEDIUM = 'MEDIUM',
   HARD = 'HARD',
   INSANE = 'INSANE',
+}
+
+// New: Card Layout (visual arrangement only)
+export enum CardLayout {
+  ORDERLY = 'ORDERLY',   // 1 center + 7 in circle
+  CHAOTIC = 'CHAOTIC',   // Physics-based random placement
+}
+
+// New: Card Set definition
+export interface CardSet {
+  id: string;            // Unique identifier (e.g., 'children', 'mixed', 'smiley')
+  name: string;          // Display name (e.g., "Children's")
+  description: string;   // Short description for UI
+  symbols: SymbolItem[]; // The actual symbols array (must have 57 items)
+  isBuiltIn: boolean;    // true for system sets, false for custom
 }
 
 export enum GameDuration {
@@ -74,7 +91,8 @@ export interface MatchAttempt {
 }
 
 export interface MultiplayerGameConfig {
-  cardDifficulty: CardDifficulty;
+  cardLayout: CardLayout;
+  cardSetId: string;
   gameDuration: GameDuration;
 }
 
@@ -124,6 +142,7 @@ export interface GameConfig {
   playerName: string;
   botCount: number;
   difficulty: Difficulty;
-  cardDifficulty: CardDifficulty;
+  cardLayout: CardLayout;
+  cardSetId: string;
   gameDuration: GameDuration;
 }

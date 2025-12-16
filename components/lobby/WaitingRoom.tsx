@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
-import { CardDifficulty, GameDuration, RoomPhase, PlayerStatus } from '../../shared/types';
+import { CardLayout, GameDuration, RoomPhase, PlayerStatus } from '../../shared/types';
+import { BUILT_IN_CARD_SETS, DEFAULT_CARD_SET_ID, getCardSetById } from '../../shared/cardSets';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 
@@ -14,7 +15,8 @@ interface WaitingRoomProps {
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplayerHook }) => {
   const [copied, setCopied] = useState(false);
   // Local state for host controls - always synced from server config when it changes
-  const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty | null>(null);
+  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
+  const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
@@ -24,16 +26,25 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   // This ensures new hosts see the correct config after host transfer
   useEffect(() => {
     if (roomState?.config) {
-      setCardDifficulty(roomState.config.cardDifficulty);
+      setCardLayout(roomState.config.cardLayout);
+      setCardSetId(roomState.config.cardSetId);
       setGameDuration(roomState.config.gameDuration);
     }
-  }, [roomState?.config?.cardDifficulty, roomState?.config?.gameDuration]);
+  }, [roomState?.config?.cardLayout, roomState?.config?.cardSetId, roomState?.config?.gameDuration]);
 
-  // Handler for when host explicitly changes card difficulty
-  const handleCardDifficultyChange = (newDifficulty: CardDifficulty) => {
-    setCardDifficulty(newDifficulty);
+  // Handler for when host explicitly changes card layout
+  const handleCardLayoutChange = (newLayout: CardLayout) => {
+    setCardLayout(newLayout);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty: newDifficulty, gameDuration });
+      setConfig({ cardLayout: newLayout, cardSetId, gameDuration });
+    }
+  };
+
+  // Handler for when host explicitly changes card set
+  const handleCardSetChange = (newCardSetId: string) => {
+    setCardSetId(newCardSetId);
+    if (isHost && roomState?.phase === RoomPhase.WAITING) {
+      setConfig({ cardLayout, cardSetId: newCardSetId, gameDuration });
     }
   };
 
@@ -41,7 +52,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const handleGameDurationChange = (newDuration: GameDuration) => {
     setGameDuration(newDuration);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardDifficulty: cardDifficulty ?? CardDifficulty.EASY, gameDuration: newDuration });
+      setConfig({ cardLayout, cardSetId, gameDuration: newDuration });
     }
   };
 
@@ -88,7 +99,8 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
     unlockAudio();
     startBackgroundMusic();
     startGame({
-      cardDifficulty: cardDifficulty ?? CardDifficulty.EASY,
+      cardLayout,
+      cardSetId,
       gameDuration,
     });
   };
@@ -231,47 +243,52 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
         {isHost && (
           <div className="mb-4">
             <p className="text-sm font-bold text-gray-700 mb-2">Card Layout</p>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <button
-                onClick={() => handleCardDifficultyChange(CardDifficulty.EASY)}
+                onClick={() => handleCardLayoutChange(CardLayout.ORDERLY)}
                 className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.EASY
+                  cardLayout === CardLayout.ORDERLY
                     ? 'bg-blue-500 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Easy
+                Orderly
               </button>
               <button
-                onClick={() => handleCardDifficultyChange(CardDifficulty.MEDIUM)}
+                onClick={() => handleCardLayoutChange(CardLayout.CHAOTIC)}
                 className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.MEDIUM
+                  cardLayout === CardLayout.CHAOTIC
                     ? 'bg-orange-500 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Medium
+                Chaotic
               </button>
-              <button
-                onClick={() => handleCardDifficultyChange(CardDifficulty.HARD)}
-                className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.HARD
-                    ? 'bg-red-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Hard
-              </button>
-              <button
-                onClick={() => handleCardDifficultyChange(CardDifficulty.INSANE)}
-                className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.INSANE
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                Insane
-              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Game Settings (Host Only) - Card Set */}
+        {isHost && (
+          <div className="mb-4">
+            <p className="text-sm font-bold text-gray-700 mb-2">Card Set</p>
+            <div className="grid grid-cols-3 gap-2">
+              {BUILT_IN_CARD_SETS.map(cardSet => (
+                <button
+                  key={cardSet.id}
+                  onClick={() => handleCardSetChange(cardSet.id)}
+                  className={`py-2 rounded-xl text-sm font-bold transition-all ${
+                    cardSetId === cardSet.id
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <div>{cardSet.name}</div>
+                  <div className="text-base mt-1">
+                    {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -324,10 +341,13 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           <div className="mb-6 p-3 bg-gray-50 rounded-xl space-y-1">
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Card Layout:</span> {
-                roomState.config.cardDifficulty === CardDifficulty.EASY ? 'Easy' :
-                roomState.config.cardDifficulty === CardDifficulty.MEDIUM ? 'Medium' :
-                roomState.config.cardDifficulty === CardDifficulty.HARD ? 'Hard' : 'Insane'
+                roomState.config.cardLayout === CardLayout.ORDERLY ? 'Orderly' : 'Chaotic'
               }
+            </p>
+            <p className="text-sm text-gray-500">
+              <span className="font-semibold">Card Set:</span> {
+                getCardSetById(roomState.config.cardSetId)?.name ?? 'Unknown'
+              } {getCardSetById(roomState.config.cardSetId)?.symbols.slice(0, 3).map(s => s.char).join('')}
             </p>
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Game Duration:</span> {

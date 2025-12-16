@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Difficulty, GameConfig, CardDifficulty, GameDuration } from '../types';
+import { Difficulty, GameConfig, CardLayout, GameDuration } from '../types';
+import { DEFAULT_CARD_SET_ID } from '../shared/cardSets';
 
 interface LobbyProps {
   onStart: (config: GameConfig) => void;
@@ -9,7 +10,7 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
   const [name, setName] = useState('');
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
-  const [cardDifficulty, setCardDifficulty] = useState<CardDifficulty>(CardDifficulty.EASY);
+  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -18,7 +19,8 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
       playerName: name.trim() || 'Player 1',
       botCount,
       difficulty,
-      cardDifficulty,
+      cardLayout,
+      cardSetId: DEFAULT_CARD_SET_ID,
       gameDuration
     });
   };
@@ -88,25 +90,25 @@ const Lobby: React.FC<LobbyProps> = ({ onStart }) => {
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setCardDifficulty(CardDifficulty.EASY)}
+                onClick={() => setCardLayout(CardLayout.ORDERLY)}
                 className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.EASY
+                  cardLayout === CardLayout.ORDERLY
                     ? 'bg-blue-500 text-white shadow-md'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Easy (Orderly)
+                Orderly
               </button>
               <button
                 type="button"
-                onClick={() => setCardDifficulty(CardDifficulty.MEDIUM)}
+                onClick={() => setCardLayout(CardLayout.CHAOTIC)}
                 className={`py-2 rounded-xl text-sm font-bold transition-all ${
-                  cardDifficulty === CardDifficulty.MEDIUM
+                  cardLayout === CardLayout.CHAOTIC
                     ? 'bg-orange-500 text-white shadow-md'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Medium (Chaotic)
+                Chaotic
               </button>
             </div>
           </div>

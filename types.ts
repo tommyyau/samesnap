@@ -4,7 +4,9 @@ export {
   type CardData,
   GameState,
   Difficulty,
-  CardDifficulty,
+  CardDifficulty,  // DEPRECATED: Use CardLayout + CardSet instead
+  CardLayout,
+  type CardSet,
   GameDuration,
   type Player,
   type GameConfig,
