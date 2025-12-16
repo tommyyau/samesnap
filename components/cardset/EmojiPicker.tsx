@@ -218,7 +218,7 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({
 
       {/* Emoji Grid */}
       <div className="flex-1 overflow-y-auto border rounded-xl p-2 bg-gray-50 min-h-[200px]">
-        <div className="grid grid-cols-8 gap-1">
+        <div className="grid grid-cols-6 sm:grid-cols-8 gap-1">
           {filteredEmojis.map((emoji, index) => {
             const isSelected = selectedEmojis.has(emoji);
             const isDisabled = !isSelected && selectedEmojis.size >= maxSelection;
@@ -229,12 +229,12 @@ const EmojiPicker: React.FC<EmojiPickerProps> = ({
                 onClick={() => !isDisabled && onToggleEmoji(emoji)}
                 disabled={isDisabled}
                 className={`
-                  w-9 h-9 flex items-center justify-center text-xl rounded-lg transition-all
+                  w-10 h-10 sm:w-9 sm:h-9 flex items-center justify-center text-2xl sm:text-xl rounded-lg transition-all
                   ${isSelected
                     ? 'bg-indigo-500 ring-2 ring-indigo-300 scale-110'
                     : isDisabled
                       ? 'opacity-30 cursor-not-allowed'
-                      : 'hover:bg-gray-200 hover:scale-110'
+                      : 'hover:bg-gray-200 active:scale-95'
                   }
                 `}
                 title={isSelected ? 'Click to remove' : isDisabled ? 'Max selection reached' : 'Click to add'}

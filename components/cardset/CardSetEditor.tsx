@@ -154,7 +154,7 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
         {/* Two Column Layout: Picker + Preview */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
           {/* Emoji Picker */}
-          <div className="bg-white rounded-2xl p-4 shadow-lg flex flex-col min-h-[400px]">
+          <div className="bg-white rounded-2xl p-4 shadow-lg flex flex-col min-h-[300px] sm:min-h-[400px]">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold text-gray-700">Select Emojis</h2>
               <button
@@ -175,7 +175,7 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
           </div>
 
           {/* Preview Panel */}
-          <div className="bg-white rounded-2xl p-4 shadow-lg flex flex-col min-h-[400px]">
+          <div className="bg-white rounded-2xl p-4 shadow-lg flex flex-col min-h-[250px] sm:min-h-[400px]">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-bold text-gray-700">Selected ({selectedEmojis.size}/{REQUIRED_SYMBOLS})</h2>
               <div className="flex gap-1">
@@ -201,16 +201,16 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
             {/* Selected Emojis Grid */}
             <div className="flex-1 overflow-y-auto border rounded-xl p-3 bg-gray-50">
               {selectedEmojis.size === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                <div className="flex items-center justify-center h-full text-gray-400 text-sm text-center px-4">
                   Select emojis from the picker or paste 57 emojis
                 </div>
               ) : (
-                <div className="grid grid-cols-8 gap-1.5">
+                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
                   {symbolsArray.map((emoji, index) => (
                     <button
                       key={`${emoji}-${index}`}
                       onClick={() => handleRemoveEmoji(emoji)}
-                      className="w-8 h-8 flex items-center justify-center text-lg rounded-lg bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 transition-colors group relative"
+                      className="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center text-xl sm:text-lg rounded-lg bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 active:bg-red-100 transition-colors group relative"
                       title="Click to remove"
                     >
                       {emoji}
