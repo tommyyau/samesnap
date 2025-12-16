@@ -92,8 +92,19 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
     clearAllBotTimers();
-    // Get symbols for the selected card set
-    const symbols = getSymbolsForCardSet(config.cardSetId);
+    // Get symbols - use custom symbols if provided, otherwise look up by cardSetId
+    let symbols: SymbolItem[];
+    if (config.customSymbols && config.customSymbols.length === 57) {
+      // Use custom symbols provided in config
+      symbols = config.customSymbols.map((char, index) => ({
+        id: index,
+        char,
+        name: `Symbol ${index}`,
+      }));
+    } else {
+      // Use built-in card set
+      symbols = getSymbolsForCardSet(config.cardSetId);
+    }
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting

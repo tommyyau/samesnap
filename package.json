@@ -23,8 +23,10 @@
     "test:quick": "node scripts/run-tests.mjs quick"
   },
   "dependencies": {
+    "@clerk/backend": "^2.27.1",
     "@clerk/clerk-react": "^5.59.0",
     "@vercel/analytics": "^1.6.1",
+    "@vercel/kv": "^3.0.0",
     "lucide-react": "^0.560.0",
     "partysocket": "^1.1.6",
     "react": "^19.2.1",

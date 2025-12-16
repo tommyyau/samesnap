@@ -13,6 +13,7 @@ import SinglePlayerGame from './components/game/SinglePlayerGame';
 import WaitingRoom from './components/lobby/WaitingRoom';
 import MultiplayerGame from './components/game/MultiplayerGame';
 import CardSetEditor from './components/cardset/CardSetEditor';
+import { Layers } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GameConfig, RoomPhase, CardSet } from './shared/types';
 import { generateRoomCode, useMultiplayerGame } from './hooks/useMultiplayerGame';
@@ -125,7 +126,9 @@ function App() {
     playerName: string;
   } | null>(null);
   const [editingCardSet, setEditingCardSet] = useState<CardSet | null>(null);
-  const { createSet, updateSet, deleteSet } = useCustomCardSets();
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { customSets, isLoading: isLoadingCardSets, createSet, updateSet, deleteSet } = useCustomCardSets();
 
   const handleSinglePlayer = () => {
     setMode(AppMode.SINGLE_PLAYER_LOBBY);
@@ -134,36 +137,62 @@ function App() {
   // Card Set Editor handlers
   const handleCreateCardSet = useCallback(() => {
     setEditingCardSet(null); // null means creating new
+    setSaveError(null);
     setMode(AppMode.CARD_SET_EDITOR);
   }, []);
 
   const handleEditCardSet = useCallback((cardSet: CardSet) => {
     setEditingCardSet(cardSet);
+    setSaveError(null);
     setMode(AppMode.CARD_SET_EDITOR);
   }, []);
 
-  const handleSaveCardSet = useCallback((name: string, symbols: string[]) => {
-    if (editingCardSet) {
-      // Editing existing
-      updateSet(editingCardSet.id, name, symbols);
-    } else {
-      // Creating new
-      createSet(name, symbols);
+  const handleSaveCardSet = useCallback(async (name: string, symbols: string[]) => {
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      let result;
+      if (editingCardSet) {
+        // Editing existing
+        result = await updateSet(editingCardSet.id, name, symbols);
+      } else {
+        // Creating new
+        result = await createSet(name, symbols);
+      }
+
+      if (result) {
+        setEditingCardSet(null);
+        setMode(AppMode.SINGLE_PLAYER_LOBBY);
+      } else {
+        setSaveError('Failed to save card set. Please try again.');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save card set');
+    } finally {
+      setIsSaving(false);
     }
-    setEditingCardSet(null);
-    setMode(AppMode.SINGLE_PLAYER_LOBBY);
   }, [editingCardSet, createSet, updateSet]);
 
-  const handleDeleteCardSet = useCallback(() => {
+  const handleDeleteCardSet = useCallback(async () => {
     if (editingCardSet) {
-      deleteSet(editingCardSet.id);
-      setEditingCardSet(null);
-      setMode(AppMode.SINGLE_PLAYER_LOBBY);
+      setIsSaving(true);
+      try {
+        const success = await deleteSet(editingCardSet.id);
+        if (success) {
+          setEditingCardSet(null);
+          setMode(AppMode.SINGLE_PLAYER_LOBBY);
+        }
+      } finally {
+        setIsSaving(false);
+      }
     }
   }, [editingCardSet, deleteSet]);
 
   const handleCancelCardSetEditor = useCallback(() => {
     setEditingCardSet(null);
+    setSaveError(null);
     setMode(AppMode.SINGLE_PLAYER_LOBBY);
   }, []);
 
@@ -223,7 +252,15 @@ function App() {
                     avatarBox: 'w-8 h-8',
                   },
                 }}
-              />
+              >
+                <UserButton.MenuItems>
+                  <UserButton.Action
+                    label={isLoadingCardSets ? 'Card Sets: ...' : `Card Sets: ${customSets.length}/10`}
+                    labelIcon={<Layers size={16} />}
+                    onClick={() => setMode(AppMode.SINGLE_PLAYER_LOBBY)}
+                  />
+                </UserButton.MenuItems>
+              </UserButton>
             </SignedIn>
           </header>
         )}
@@ -241,6 +278,10 @@ function App() {
             onBack={handleBackToMenu}
             onCreateCardSet={handleCreateCardSet}
             onEditCardSet={handleEditCardSet}
+            customSets={customSets}
+            isLoadingCardSets={isLoadingCardSets}
+            canCreate={customSets.length < 10}
+            onDeleteCardSet={deleteSet}
           />
         )}
 
@@ -250,6 +291,8 @@ function App() {
             onSave={handleSaveCardSet}
             onCancel={handleCancelCardSetEditor}
             onDelete={editingCardSet ? handleDeleteCardSet : undefined}
+            isSaving={isSaving}
+            saveError={saveError}
           />
         )}
 

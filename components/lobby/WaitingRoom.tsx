@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Copy, Check, Crown, Wifi, WifiOff, Play, LogOut, Users, Clock, AlertCircle } from 'lucide-react';
 import { CardLayout, GameDuration, RoomPhase, PlayerStatus } from '../../shared/types';
-import { BUILT_IN_CARD_SETS, getAllCardSets, DEFAULT_CARD_SET_ID, getCardSetById } from '../../shared/cardSets';
+import { getBuiltInCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
+import { useCustomCardSets } from '../../hooks/useCustomCardSets';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 
@@ -21,6 +22,14 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   const { roomState, isConnected, isHost, latency, connectionError, setConfig, startGame, leaveRoom, clearError } = multiplayerHook;
+
+  // Get card sets (built-in + custom from cloud)
+  const { customSets } = useCustomCardSets();
+  const builtInSets = getBuiltInCardSets();
+  const allCardSets = useMemo(() => [...builtInSets, ...customSets], [builtInSets, customSets]);
+
+  // Helper to get a card set by ID
+  const getCardSetById = (id: string) => allCardSets.find(set => set.id === id);
 
   // Always sync local state FROM server config when it changes
   // This ensures new hosts see the correct config after host transfer
@@ -287,7 +296,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
           <div className="mb-4">
             <p className="text-sm font-bold text-gray-700 mb-2">Card Set</p>
             <div className="grid grid-cols-3 gap-2">
-              {getAllCardSets().map(cardSet => (
+              {allCardSets.map(cardSet => (
                 <button
                   key={cardSet.id}
                   onClick={() => handleCardSetChange(cardSet.id)}
