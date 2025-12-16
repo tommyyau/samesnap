@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Difficulty, GameConfig, CardLayout, GameDuration, CardSet } from '../../shared/types';
-import { getAllCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
+import { getBuiltInCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
-import { ArrowLeft, Plus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
-import { useCustomCardSets } from '../../hooks/useCustomCardSets';
 
 interface SinglePlayerLobbyProps {
   onStart: (config: GameConfig) => void;
   onBack: () => void;
   onCreateCardSet?: () => void;
   onEditCardSet?: (cardSet: CardSet) => void;
+  // Card set data from parent (App.tsx)
+  customSets: CardSet[];
+  isLoadingCardSets: boolean;
+  canCreate: boolean;
+  onDeleteCardSet: (id: string) => Promise<boolean>;
 }
 
 const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
@@ -18,13 +22,17 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
   onBack,
   onCreateCardSet,
   onEditCardSet,
+  customSets,
+  isLoadingCardSets,
+  canCreate,
+  onDeleteCardSet,
 }) => {
   const { user, isSignedIn } = useUser();
   const [name, setName] = useState('');
-  const { customSets, deleteSet, refresh: refreshCustomSets } = useCustomCardSets();
 
-  // Get all card sets (built-in + custom)
-  const allCardSets = getAllCardSets();
+  // Get all card sets (built-in + custom from cloud)
+  const builtInSets = getBuiltInCardSets();
+  const allCardSets = [...builtInSets, ...customSets];
 
   // Pre-fill player name from Clerk user's first name
   useEffect(() => {
@@ -33,11 +41,6 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
     }
   }, [isSignedIn, user]);
 
-  // Refresh custom sets when component mounts (in case they were edited externally)
-  useEffect(() => {
-    refreshCustomSets();
-  }, [refreshCustomSets]);
-
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
@@ -45,12 +48,12 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
 
   // Handle deleting a custom card set
-  const handleDeleteCardSet = (setId: string, e: React.MouseEvent) => {
+  const handleDeleteCardSet = async (setId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (confirm('Delete this card set?')) {
-      deleteSet(setId);
+      const success = await onDeleteCardSet(setId);
       // If the deleted set was selected, switch to default
-      if (cardSetId === setId) {
+      if (success && cardSetId === setId) {
         setCardSetId(DEFAULT_CARD_SET_ID);
       }
     }
@@ -63,13 +66,23 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
     // for iOS to allow audio playback
     unlockAudio();
     startBackgroundMusic();
+
+    // Find the selected card set to get custom symbols if needed
+    const selectedSet = allCardSets.find(s => s.id === cardSetId);
+    const isCustomSet = selectedSet && !selectedSet.isBuiltIn;
+
     onStart({
       playerName: name.trim() || 'Player 1',
       botCount,
       difficulty,
       cardLayout,
       cardSetId,
-      gameDuration
+      gameDuration,
+      // Include custom symbols if using a custom set
+      ...(isCustomSet && selectedSet ? {
+        customSymbols: selectedSet.symbols.map(s => s.char),
+        customSetName: selectedSet.name,
+      } : {}),
     });
   };
 
@@ -196,7 +209,12 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
 
               {/* Card Set - Full Width Below */}
               <div className="sm:col-span-2">
-                <label className="block text-xs uppercase tracking-wider font-bold text-gray-400 mb-1">Card Set</label>
+                <div className="flex items-center gap-2 mb-1">
+                  <label className="block text-xs uppercase tracking-wider font-bold text-gray-400">Card Set</label>
+                  {isLoadingCardSets && (
+                    <Loader2 size={12} className="animate-spin text-gray-400" />
+                  )}
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   {allCardSets.map(cardSet => (
                     <button
@@ -213,8 +231,8 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
                       <div className="text-lg mt-1">
                         {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
                       </div>
-                      {/* Edit/Delete buttons for custom sets */}
-                      {!cardSet.isBuiltIn && onEditCardSet && (
+                      {/* Edit/Delete buttons for custom sets (only for signed-in users) */}
+                      {!cardSet.isBuiltIn && isSignedIn && onEditCardSet && (
                         <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
                             type="button"
@@ -239,8 +257,8 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
                       )}
                     </button>
                   ))}
-                  {/* Create New Card Set Button */}
-                  {onCreateCardSet && (
+                  {/* Create New Card Set Button - only for signed-in users under limit */}
+                  {canCreate && onCreateCardSet && (
                     <button
                       type="button"
                       onClick={onCreateCardSet}

@@ -149,4 +149,8 @@ export interface GameConfig {
   cardLayout: CardLayout;
   cardSetId: string;
   gameDuration: GameDuration;
+  /** Custom symbols (57 emoji chars) - sent when using a custom card set */
+  customSymbols?: string[];
+  /** Custom set name - for display purposes */
+  customSetName?: string;
 }

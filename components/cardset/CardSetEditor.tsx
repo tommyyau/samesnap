@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { ArrowLeft, Save, Trash2, ClipboardPaste, Shuffle, X } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, ClipboardPaste, Shuffle, X, Loader2 } from 'lucide-react';
 import EmojiPicker from './EmojiPicker';
 import { CardSet } from '../../shared/types';
 
@@ -12,6 +12,10 @@ interface CardSetEditorProps {
   onCancel: () => void;
   /** Called when user deletes the set (only for existing sets) */
   onDelete?: () => void;
+  /** Whether a save operation is in progress */
+  isSaving?: boolean;
+  /** Error message from save operation */
+  saveError?: string | null;
 }
 
 const REQUIRED_SYMBOLS = 57;
@@ -21,6 +25,8 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
   onSave,
   onCancel,
   onDelete,
+  isSaving = false,
+  saveError = null,
 }) => {
   const [name, setName] = useState(existingSet?.name || '');
   const [selectedEmojis, setSelectedEmojis] = useState<Set<string>>(() => {
@@ -272,33 +278,52 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="bg-white rounded-2xl p-4 shadow-lg flex items-center justify-between">
-          {isEditing && onDelete ? (
-            <button
-              onClick={onDelete}
-              className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-xl font-medium transition-colors flex items-center gap-2"
-            >
-              <Trash2 size={18} />
-              Delete Set
-            </button>
-          ) : (
-            <div />
+        <div className="bg-white rounded-2xl p-4 shadow-lg">
+          {/* Error message */}
+          {saveError && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              {saveError}
+            </div>
           )}
-          <div className="flex gap-3">
-            <button
-              onClick={onCancel}
-              className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={!isValid}
-              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 text-white disabled:text-gray-500 rounded-xl font-bold transition-colors flex items-center gap-2"
-            >
-              <Save size={18} />
-              {isEditing ? 'Save Changes' : 'Create Set'}
-            </button>
+          <div className="flex items-center justify-between">
+            {isEditing && onDelete ? (
+              <button
+                onClick={onDelete}
+                disabled={isSaving}
+                className="px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-50 rounded-xl font-medium transition-colors flex items-center gap-2"
+              >
+                <Trash2 size={18} />
+                Delete Set
+              </button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={onCancel}
+                disabled={isSaving}
+                className="px-6 py-2.5 text-gray-600 hover:bg-gray-100 disabled:opacity-50 rounded-xl font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={!isValid || isSaving}
+                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-gray-300 text-white disabled:text-gray-500 rounded-xl font-bold transition-colors flex items-center gap-2"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    {isEditing ? 'Save Changes' : 'Create Set'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
