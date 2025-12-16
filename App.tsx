@@ -255,7 +255,12 @@ function App() {
               >
                 <UserButton.MenuItems>
                   <UserButton.Action
-                    label={isLoadingCardSets ? 'Card Sets: ...' : `Card Sets: ${customSets.length}/10`}
+                    label={isLoadingCardSets
+                      ? 'Card Sets: ...'
+                      : customSets.length === 0
+                        ? 'Card Sets: None (0/10)'
+                        : `Card Sets: ${customSets.map(s => s.name).join(', ')} (${customSets.length}/10)`
+                    }
                     labelIcon={<Layers size={16} />}
                     onClick={() => setMode(AppMode.SINGLE_PLAYER_LOBBY)}
                   />
