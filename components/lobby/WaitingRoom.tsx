@@ -32,11 +32,29 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
     }
   }, [roomState?.config?.cardLayout, roomState?.config?.cardSetId, roomState?.config?.gameDuration]);
 
+  // Helper to build config with custom symbols if needed
+  const buildConfig = (overrides: Partial<{ cardLayout: CardLayout; cardSetId: string; gameDuration: GameDuration }>) => {
+    const finalCardSetId = overrides.cardSetId ?? cardSetId;
+    const selectedSet = getCardSetById(finalCardSetId);
+    const isCustomSet = selectedSet && !selectedSet.isBuiltIn;
+
+    return {
+      cardLayout: overrides.cardLayout ?? cardLayout,
+      cardSetId: finalCardSetId,
+      gameDuration: overrides.gameDuration ?? gameDuration,
+      // Include custom symbols if using a custom set
+      ...(isCustomSet && selectedSet ? {
+        customSymbols: selectedSet.symbols.map(s => s.char),
+        customSetName: selectedSet.name,
+      } : {}),
+    };
+  };
+
   // Handler for when host explicitly changes card layout
   const handleCardLayoutChange = (newLayout: CardLayout) => {
     setCardLayout(newLayout);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardLayout: newLayout, cardSetId, gameDuration });
+      setConfig(buildConfig({ cardLayout: newLayout }));
     }
   };
 
@@ -44,7 +62,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const handleCardSetChange = (newCardSetId: string) => {
     setCardSetId(newCardSetId);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardLayout, cardSetId: newCardSetId, gameDuration });
+      setConfig(buildConfig({ cardSetId: newCardSetId }));
     }
   };
 
@@ -52,7 +70,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   const handleGameDurationChange = (newDuration: GameDuration) => {
     setGameDuration(newDuration);
     if (isHost && roomState?.phase === RoomPhase.WAITING) {
-      setConfig({ cardLayout, cardSetId, gameDuration: newDuration });
+      setConfig(buildConfig({ gameDuration: newDuration }));
     }
   };
 
@@ -98,21 +116,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
     // Unlock audio on iOS/Safari - must happen during user gesture
     unlockAudio();
     startBackgroundMusic();
-
-    // Check if using a custom card set
-    const selectedSet = getCardSetById(cardSetId);
-    const isCustomSet = selectedSet && !selectedSet.isBuiltIn;
-
-    startGame({
-      cardLayout,
-      cardSetId,
-      gameDuration,
-      // Include custom symbols if using a custom set
-      ...(isCustomSet && selectedSet ? {
-        customSymbols: selectedSet.symbols.map(s => s.char),
-        customSetName: selectedSet.name,
-      } : {}),
-    });
+    startGame(buildConfig({}));
   };
 
   const handleLeave = () => {
@@ -361,8 +365,16 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
             </p>
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Card Set:</span> {
-                getCardSetById(roomState.config.cardSetId)?.name ?? 'Unknown'
-              } {getCardSetById(roomState.config.cardSetId)?.symbols.slice(0, 3).map(s => s.char).join('')}
+                // Use customSetName for custom sets, otherwise look up by ID
+                roomState.config.customSetName
+                  ?? getCardSetById(roomState.config.cardSetId)?.name
+                  ?? 'Unknown'
+              } {
+                // Show preview emojis - from customSymbols or from built-in set
+                roomState.config.customSymbols?.slice(0, 3).join('')
+                  ?? getCardSetById(roomState.config.cardSetId)?.symbols.slice(0, 3).map(s => s.char).join('')
+                  ?? ''
+              }
             </p>
             <p className="text-sm text-gray-500">
               <span className="font-semibold">Game Duration:</span> {
