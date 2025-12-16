@@ -174,66 +174,100 @@ const CardSetEditor: React.FC<CardSetEditorProps> = ({
             </div>
           </div>
 
-          {/* Preview Panel */}
+          {/* Selected Emojis Panel - The 57-Slot Grid */}
           <div className="bg-white rounded-2xl p-4 shadow-lg flex flex-col min-h-[250px] sm:min-h-[400px]">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="font-bold text-gray-700">Selected ({selectedEmojis.size}/{REQUIRED_SYMBOLS})</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-gray-700">Your 57 Emojis</h2>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  selectedEmojis.size === REQUIRED_SYMBOLS
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-amber-100 text-amber-700'
+                }`}>
+                  {selectedEmojis.size}/{REQUIRED_SYMBOLS}
+                </span>
+              </div>
               <div className="flex gap-1">
                 <button
                   onClick={handleShuffle}
                   disabled={selectedEmojis.size === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                  title="Shuffle order"
                 >
                   <Shuffle size={14} />
-                  Shuffle
                 </button>
                 <button
                   onClick={handleClearAll}
                   disabled={selectedEmojis.size === 0}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Clear all"
                 >
                   <Trash2 size={14} />
-                  Clear
                 </button>
               </div>
             </div>
 
-            {/* Selected Emojis Grid */}
-            <div className="flex-1 overflow-y-auto border rounded-xl p-3 bg-gray-50">
-              {selectedEmojis.size === 0 ? (
-                <div className="flex items-center justify-center h-full text-gray-400 text-sm text-center px-4">
-                  Select emojis from the picker or paste 57 emojis
-                </div>
-              ) : (
-                <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-                  {symbolsArray.map((emoji, index) => (
-                    <button
-                      key={`${emoji}-${index}`}
-                      onClick={() => handleRemoveEmoji(emoji)}
-                      className="w-10 h-10 sm:w-8 sm:h-8 flex items-center justify-center text-xl sm:text-lg rounded-lg bg-white border border-gray-200 hover:bg-red-50 hover:border-red-300 active:bg-red-100 transition-colors group relative"
-                      title="Click to remove"
+            {/* 57-Slot Grid - Always shows all 57 positions */}
+            <div className="flex-1 overflow-y-auto border-2 border-dashed border-gray-300 rounded-xl p-2 bg-gradient-to-br from-gray-50 to-gray-100">
+              <div className="grid grid-cols-8 sm:grid-cols-10 lg:grid-cols-8 gap-1">
+                {Array.from({ length: REQUIRED_SYMBOLS }).map((_, index) => {
+                  const emoji = symbolsArray[index];
+                  const isFilled = !!emoji;
+
+                  return (
+                    <div
+                      key={index}
+                      className={`
+                        aspect-square flex items-center justify-center rounded-lg text-lg sm:text-xl transition-all
+                        ${isFilled
+                          ? 'bg-white border-2 border-indigo-200 shadow-sm cursor-pointer hover:bg-red-50 hover:border-red-300 group relative'
+                          : 'bg-gray-200/50 border-2 border-dashed border-gray-300'
+                        }
+                      `}
+                      onClick={() => isFilled && handleRemoveEmoji(emoji)}
+                      title={isFilled ? `${emoji} - Click to remove` : `Slot ${index + 1} - Empty`}
                     >
-                      {emoji}
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <X size={10} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                      {isFilled ? (
+                        <>
+                          {emoji}
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow">
+                            <X size={10} />
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-300 text-xs font-medium">{index + 1}</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Validation Message */}
-            {selectedEmojis.size > 0 && selectedEmojis.size < REQUIRED_SYMBOLS && (
-              <p className="mt-2 text-sm text-amber-600 font-medium">
-                Need {REQUIRED_SYMBOLS - selectedEmojis.size} more emoji{REQUIRED_SYMBOLS - selectedEmojis.size !== 1 ? 's' : ''}
+            {/* Progress Bar */}
+            <div className="mt-3">
+              <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    selectedEmojis.size === REQUIRED_SYMBOLS
+                      ? 'bg-green-500'
+                      : 'bg-indigo-500'
+                  }`}
+                  style={{ width: `${(selectedEmojis.size / REQUIRED_SYMBOLS) * 100}%` }}
+                />
+              </div>
+              <p className={`mt-1 text-xs font-medium text-center ${
+                selectedEmojis.size === REQUIRED_SYMBOLS
+                  ? 'text-green-600'
+                  : 'text-gray-500'
+              }`}>
+                {selectedEmojis.size === REQUIRED_SYMBOLS
+                  ? '✓ Complete! Ready to save.'
+                  : selectedEmojis.size === 0
+                    ? 'Select emojis from the picker or paste 57 emojis'
+                    : `${REQUIRED_SYMBOLS - selectedEmojis.size} more to go`
+                }
               </p>
-            )}
-            {selectedEmojis.size === REQUIRED_SYMBOLS && (
-              <p className="mt-2 text-sm text-green-600 font-medium">
-                Perfect! Ready to save.
-              </p>
-            )}
+            </div>
           </div>
         </div>
 
