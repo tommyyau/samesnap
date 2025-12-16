@@ -47,6 +47,7 @@ export default class SameSnapRoom implements Party.Server {
 
   // Countdown timer tracking
   private countdownTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private currentCountdown: number | null = null;
 
   // Round-end timer tracking (for next round transition)
   private roundEndTimeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -347,6 +348,7 @@ export default class SameSnapRoom implements Party.Server {
   private startCountdown() {
     this.phase = RoomPhase.COUNTDOWN;
     let count = 5;  // 5-4-3-2-1 countdown
+    this.currentCountdown = count;
 
     // Cancel room timeout since game is starting
     if (this.roomTimeoutId) {
@@ -359,15 +361,18 @@ export default class SameSnapRoom implements Party.Server {
       // Guard: abort if we're no longer in countdown phase
       if (this.phase !== RoomPhase.COUNTDOWN) {
         this.countdownTimeoutId = null;
+        this.currentCountdown = null;
         return;
       }
 
+      this.currentCountdown = count;
       this.broadcastToAll({ type: 'countdown', payload: { seconds: count } });
       if (count > 0) {
         count--;
         this.countdownTimeoutId = setTimeout(tick, 1000);
       } else {
         this.countdownTimeoutId = null;
+        this.currentCountdown = null;
         // Guard: only start if we still have at least 2 connected players
         const connectedCount = this.getConnectedPlayerCount();
         if (connectedCount >= 2) {
@@ -391,6 +396,7 @@ export default class SameSnapRoom implements Party.Server {
       clearTimeout(this.countdownTimeoutId);
       this.countdownTimeoutId = null;
     }
+    this.currentCountdown = null;
     if (this.phase === RoomPhase.COUNTDOWN) {
       this.phase = RoomPhase.WAITING;
       // Re-arm room timeout since we're back to waiting
@@ -1059,6 +1065,7 @@ export default class SameSnapRoom implements Party.Server {
       penaltyRemainingMs: this.getPenaltyRemainingMs(playerId),
       roomExpiresAt: this.roomExpiresAt || undefined,
       roomExpiresInMs: this.roomExpiresAt ? Math.max(0, this.roomExpiresAt - Date.now()) : undefined,
+      countdown: this.currentCountdown ?? undefined,
       gameEndReason: this.phase === RoomPhase.GAME_OVER ? this.lastGameEndReason : undefined,
       rejoinWindowEndsAt: this.rejoinWindowEndsAt || undefined,
       playersWantRematch: this.playersWantRematch.size > 0 ? Array.from(this.playersWantRematch) : undefined,

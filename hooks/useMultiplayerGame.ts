@@ -183,7 +183,12 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           });
           pendingCountdown.current = null;
         } else {
-          setRoomState(stateWithClientPenalty);
+          // Use countdown from server if provided, otherwise preserve existing value during countdown phase
+          setRoomState(prev => ({
+            ...stateWithClientPenalty,
+            countdown: stateWithClientPenalty.countdown
+              ?? (stateWithClientPenalty.phase === RoomPhase.COUNTDOWN ? prev?.countdown : undefined),
+          }));
         }
         // Update host status and persist player ID for future reconnects
         if (me) {
