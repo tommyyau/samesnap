@@ -2,7 +2,7 @@ import type * as Party from "partykit/server";
 import {
   RoomPhase, PlayerStatus, ServerPlayer, ClientPlayer,
   ClientRoomState, CardData, MultiplayerGameConfig, MatchAttempt,
-  CardLayout, GameDuration
+  CardLayout, GameDuration, SymbolItem
 } from "../shared/types";
 import { ClientMessage, ServerMessage, ERROR_CODES } from "../shared/protocol";
 import { generateDeck } from "../shared/gameLogic";
@@ -409,9 +409,21 @@ export default class SameSnapRoom implements Party.Server {
   }
 
   private startGame() {
-    // Get symbols for the selected card set
-    const cardSetId = this.config?.cardSetId ?? DEFAULT_CARD_SET_ID;
-    const symbols = getSymbolsForCardSet(cardSetId);
+    // Get symbols - use custom symbols if provided, otherwise look up by cardSetId
+    let symbols: SymbolItem[];
+    if (this.config?.customSymbols && this.config.customSymbols.length === 57) {
+      // Use custom symbols provided by host
+      symbols = this.config.customSymbols.map((char, index) => ({
+        id: index,
+        char,
+        name: `Symbol ${index}`,
+      }));
+      console.log(`[Room ${this.room.id}] Using custom card set: ${this.config.customSetName || 'Custom'}`);
+    } else {
+      // Use built-in card set
+      const cardSetId = this.config?.cardSetId ?? DEFAULT_CARD_SET_ID;
+      symbols = getSymbolsForCardSet(cardSetId);
+    }
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting

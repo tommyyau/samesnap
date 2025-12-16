@@ -98,10 +98,20 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
     // Unlock audio on iOS/Safari - must happen during user gesture
     unlockAudio();
     startBackgroundMusic();
+
+    // Check if using a custom card set
+    const selectedSet = getCardSetById(cardSetId);
+    const isCustomSet = selectedSet && !selectedSet.isBuiltIn;
+
     startGame({
       cardLayout,
       cardSetId,
       gameDuration,
+      // Include custom symbols if using a custom set
+      ...(isCustomSet && selectedSet ? {
+        customSymbols: selectedSet.symbols.map(s => s.char),
+        customSetName: selectedSet.name,
+      } : {}),
     });
   };
 
@@ -282,23 +292,19 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
-                  title={!cardSet.isBuiltIn ? 'Custom sets work in single-player only (for now)' : undefined}
                 >
                   <div>{cardSet.name}</div>
                   <div className="text-base mt-1">
                     {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
                   </div>
                   {!cardSet.isBuiltIn && (
-                    <span className="absolute top-1 right-1 text-[8px] bg-yellow-400 text-yellow-900 px-1 rounded">
-                      SP
+                    <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white px-1 rounded">
+                      Custom
                     </span>
                   )}
                 </button>
               ))}
             </div>
-            <p className="text-xs text-gray-400 mt-1 text-center">
-              Sets marked "SP" work in single-player only
-            </p>
           </div>
         )}
 
