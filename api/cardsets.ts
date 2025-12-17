@@ -30,9 +30,23 @@ async function getUserId(req: VercelRequest): Promise<string | null> {
   }
 
   try {
+    // Allow localhost, production, and all Vercel preview deployments
+    const authorizedParties = [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://samesnap.vercel.app',
+    ];
+
+    // Add the request origin if it's a Vercel preview deployment
+    const origin = req.headers.origin || req.headers.referer;
+    if (origin && origin.includes('.vercel.app') && !authorizedParties.includes(origin)) {
+      const cleanOrigin = origin.replace(/\/$/, ''); // Remove trailing slash
+      authorizedParties.push(cleanOrigin);
+    }
+
     const payload = await verifyToken(token, {
       secretKey,
-      authorizedParties: ['http://localhost:3000', 'http://localhost:3001', 'https://samesnap.vercel.app'],
+      authorizedParties,
     });
     console.log('Token verified, userId:', payload.sub);
     return payload.sub;
