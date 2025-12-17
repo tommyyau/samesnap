@@ -6,7 +6,8 @@ import { PENALTY_DURATION, BOT_NAMES } from '../../constants';
 import Card from '../Card';
 import { XCircle, Zap } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
-import { useUserStats } from '../../hooks/useUserStats';
+import { useUserStats, hasShownSignInPrompt, markSignInPromptShown } from '../../hooks/useUserStats';
+import { Toast } from '../common/Toast';
 import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
 import { useBotAI } from '../../hooks/useBotAI';
 import { useGameAudio } from '../../hooks/useGameAudio';
@@ -29,6 +30,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
   // Highlighting State
   const [matchedSymbolId, setMatchedSymbolId] = useState<number | null>(null);
+
+  // Toast notification state
+  const [toast, setToast] = useState<{ message: string; icon?: string } | null>(null);
 
   // Responsive sizing - bot row is shorter than multiplayer opponent row
   const { cardSize, isMobile, dimensions } = useResponsiveCardSize({
@@ -171,6 +175,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     setLastWinnerId(null);
     setPenaltyUntil(0);
     setMatchedSymbolId(null);
+    setToast(null);
   }, [config, clearAllBotTimers]);
 
   // Initial mount
@@ -246,7 +251,16 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
         playerCount: 1 + config.botCount,
       },
     };
-    recordGameResult(payload);
+
+    // Record game and show appropriate toast
+    recordGameResult(payload).then(result => {
+      if (result.isPersonalBest) {
+        setToast({ message: 'New Record!', icon: '🔥' });
+      } else if (!result.recorded && !hasShownSignInPrompt()) {
+        markSignInPromptShown();
+        setToast({ message: 'Sign in to save your progress' });
+      }
+    });
 
     // Show victory celebration for 3 seconds before scoreboard
     setGameState(GameState.VICTORY_CELEBRATION);
@@ -336,14 +350,17 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     }));
 
     return (
-      <GameOverScoreboard
-        players={playerScores}
-        isPlayerWinner={isHumanWinner}
-        winnerName={winner.name}
-        onPlayAgain={startNewGame}
-        onExit={handleExit}
-        variant="singleplayer"
-      />
+      <>
+        <GameOverScoreboard
+          players={playerScores}
+          isPlayerWinner={isHumanWinner}
+          winnerName={winner.name}
+          onPlayAgain={startNewGame}
+          onExit={handleExit}
+          variant="singleplayer"
+        />
+        {toast && <Toast {...toast} onDismiss={() => setToast(null)} />}
+      </>
     );
   }
 

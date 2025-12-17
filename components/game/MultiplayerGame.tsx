@@ -6,7 +6,8 @@ import Card from '../Card';
 import { XCircle, Zap, Wifi } from 'lucide-react';
 import { ConnectionErrorModal } from '../common/ConnectionErrorModal';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
-import { useUserStats } from '../../hooks/useUserStats';
+import { useUserStats, hasShownSignInPrompt, markSignInPromptShown } from '../../hooks/useUserStats';
+import { Toast } from '../common/Toast';
 import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
 import { useGameAudio } from '../../hooks/useGameAudio';
 import { VictoryCelebration } from '../common/VictoryCelebration';
@@ -27,6 +28,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
   const [showVictoryCelebration, setShowVictoryCelebration] = useState(false);
   const [victoryCelebrationShown, setVictoryCelebrationShown] = useState(false);
+  const [toast, setToast] = useState<{ message: string; icon?: string } | null>(null);
 
   // Responsive sizing - opponent row is taller than single-player bot row
   const { cardSize } = useResponsiveCardSize({
@@ -83,7 +85,15 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         },
       };
 
-      recordGameResult(payload);
+      // Record game and show appropriate toast
+      recordGameResult(payload).then(result => {
+        if (result.isPersonalBest) {
+          setToast({ message: 'New Record!', icon: '🔥' });
+        } else if (!result.recorded && !hasShownSignInPrompt()) {
+          markSignInPromptShown();
+          setToast({ message: 'Sign in to save your progress' });
+        }
+      });
     }
   }, [roomState?.phase, roomState?.players, roomState?.gameEndReason, roomState?.config, recordGameResult]);
 
@@ -131,6 +141,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       setHasClickedPlayAgain(false);
       setVictoryCelebrationShown(false);
       setShowVictoryCelebration(false);
+      setToast(null);
       // Reset stats tracking for next game
       gameStartTimeRef.current = null;
       statsRecordedRef.current = false;
@@ -236,21 +247,24 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }));
 
     return (
-      <GameOverScoreboard
-        players={playerScores}
-        isPlayerWinner={isYouWinner}
-        winnerName={winner?.name || 'Unknown'}
-        onPlayAgain={handlePlayAgain}
-        onExit={handleExit}
-        variant="multiplayer"
-        isLastPlayerStanding={isLastPlayerStanding}
-        rejoinTimeLeft={rejoinTimeLeft}
-        playersWantingRematchCount={playersWantingRematch.length}
-        canPlayAgain={canPlayAgain}
-        waitingForOthers={hasClickedPlayAgain || !!youWantRematch}
-        playAgainLabel="Rejoin Room"
-        exitLabel="Back to Lobby"
-      />
+      <>
+        <GameOverScoreboard
+          players={playerScores}
+          isPlayerWinner={isYouWinner}
+          winnerName={winner?.name || 'Unknown'}
+          onPlayAgain={handlePlayAgain}
+          onExit={handleExit}
+          variant="multiplayer"
+          isLastPlayerStanding={isLastPlayerStanding}
+          rejoinTimeLeft={rejoinTimeLeft}
+          playersWantingRematchCount={playersWantingRematch.length}
+          canPlayAgain={canPlayAgain}
+          waitingForOthers={hasClickedPlayAgain || !!youWantRematch}
+          playAgainLabel="Rejoin Room"
+          exitLabel="Back to Lobby"
+        />
+        {toast && <Toast {...toast} onDismiss={() => setToast(null)} />}
+      </>
     );
   }
 
