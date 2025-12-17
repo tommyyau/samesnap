@@ -19,7 +19,7 @@ export const BUILT_IN_CARD_SETS: CardSet[] = [
   },
   {
     id: 'smiley',
-    name: 'Smiley Faces',
+    name: 'Insanity',
     description: 'All yellow faces - extremely challenging!',
     symbols: SYMBOLS_INSANE,
     isBuiltIn: true,

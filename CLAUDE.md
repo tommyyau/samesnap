@@ -6,14 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 npm install        # Install dependencies
-npm run dev        # Start Vite dev server on port 3000
+vercel dev         # Start local dev server with API routes (RECOMMENDED)
 npm run dev:party  # Start PartyKit multiplayer server on port 1999
-npm run dev:all    # Start both servers concurrently
 npm run build      # Production build
 npm run preview    # Preview production build
 ```
 
-Note: Requires `GEMINI_API_KEY` in `.env.local` (referenced in vite.config.ts but not currently used in the game code).
+### Local Development
+
+**Use `vercel dev` instead of `npm run dev`** for local development. The app uses Vercel serverless functions for API routes (`/api/cardsets`, `/api/stats`). These only work with:
+- `vercel dev` - runs both frontend and API routes locally
+- Production deployment on Vercel
+
+Using `npm run dev` (Vite only) will cause API calls to fail - custom card sets and user stats won't load.
+
+Note: Requires environment variables in `.env.local`:
+- `CLERK_SECRET_KEY` - for API authentication
+- `KV_REST_API_URL` and `KV_REST_API_TOKEN` - for Vercel KV storage
 
 ### PartyKit Local Development
 

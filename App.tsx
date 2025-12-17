@@ -13,7 +13,8 @@ import SinglePlayerGame from './components/game/SinglePlayerGame';
 import WaitingRoom from './components/lobby/WaitingRoom';
 import MultiplayerGame from './components/game/MultiplayerGame';
 import CardSetEditor from './components/cardset/CardSetEditor';
-import { Layers } from 'lucide-react';
+import { ProfileDrawer, CardSetsDrawer } from './components/profile';
+import { Layers, BarChart2 } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { GameConfig, RoomPhase, CardSet } from './shared/types';
 import { generateRoomCode, useMultiplayerGame } from './hooks/useMultiplayerGame';
@@ -128,6 +129,8 @@ function App() {
   const [editingCardSet, setEditingCardSet] = useState<CardSet | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
+  const [cardSetsDrawerOpen, setCardSetsDrawerOpen] = useState(false);
   const { customSets, isLoading: isLoadingCardSets, canCreate, createSet, updateSet, deleteSet } = useCustomCardSets();
 
   const handleSinglePlayer = () => {
@@ -255,6 +258,11 @@ function App() {
               >
                 <UserButton.MenuItems>
                   <UserButton.Action
+                    label="My Stats"
+                    labelIcon={<BarChart2 size={16} />}
+                    onClick={() => setProfileDrawerOpen(true)}
+                  />
+                  <UserButton.Action
                     label={isLoadingCardSets
                       ? 'Card Sets: ...'
                       : customSets.length === 0
@@ -262,7 +270,7 @@ function App() {
                         : `Card Sets: ${customSets.map(s => s.name).join(', ')} (${customSets.length}/10)`
                     }
                     labelIcon={<Layers size={16} />}
-                    onClick={() => setMode(AppMode.SINGLE_PLAYER_LOBBY)}
+                    onClick={() => setCardSetsDrawerOpen(true)}
                   />
                 </UserButton.MenuItems>
               </UserButton>
@@ -318,6 +326,21 @@ function App() {
             onReturnToWaiting={handleReturnToWaiting}
           />
         )}
+
+        {/* Profile Drawer */}
+        <ProfileDrawer
+          isOpen={profileDrawerOpen}
+          onClose={() => setProfileDrawerOpen(false)}
+        />
+
+        {/* Card Sets Drawer */}
+        <CardSetsDrawer
+          isOpen={cardSetsDrawerOpen}
+          onClose={() => setCardSetsDrawerOpen(false)}
+          onManage={() => setMode(AppMode.SINGLE_PLAYER_LOBBY)}
+          cardSets={customSets}
+          isLoading={isLoadingCardSets}
+        />
       </div>
     </ErrorBoundary>
   );
