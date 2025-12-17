@@ -22,7 +22,7 @@ async function getUserId(req: VercelRequest): Promise<string | null> {
   try {
     const payload = await verifyToken(token, {
       secretKey: process.env.CLERK_SECRET_KEY!,
-      authorizedParties: ['http://localhost:3000', 'https://samesnap.vercel.app'],
+      authorizedParties: ['http://localhost:3000', 'http://localhost:3001', 'https://samesnap.vercel.app'],
     });
     return payload.sub;
   } catch {

@@ -32,7 +32,7 @@ async function getUserId(req: VercelRequest): Promise<string | null> {
   try {
     const payload = await verifyToken(token, {
       secretKey,
-      authorizedParties: ['http://localhost:3000', 'https://samesnap.vercel.app'],
+      authorizedParties: ['http://localhost:3000', 'http://localhost:3001', 'https://samesnap.vercel.app'],
     });
     console.log('Token verified, userId:', payload.sub);
     return payload.sub;

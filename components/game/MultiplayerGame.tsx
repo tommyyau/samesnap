@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
-import { RoomPhase, SymbolItem, CardLayout } from '../../shared/types';
+import { RoomPhase, SymbolItem, CardLayout, RecordGamePayload } from '../../shared/types';
 import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
+import { getCardSetById } from '../../shared/cardSets';
 import Card from '../Card';
 import { Trophy, XCircle, Zap, Wifi, AlertCircle } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
+import { useUserStats } from '../../hooks/useUserStats';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -22,6 +24,11 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
   const [showVictoryCelebration, setShowVictoryCelebration] = useState(false);
   const [victoryCelebrationShown, setVictoryCelebrationShown] = useState(false);
+
+  // Game stats tracking
+  const gameStartTimeRef = useRef<number | null>(null);
+  const statsRecordedRef = useRef(false);
+  const { recordGameResult } = useUserStats();
 
   // Window Resize Listener
   useEffect(() => {
@@ -70,13 +77,50 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     return Math.max(140, cardSize);
   };
 
-  // Start/stop background music
+  // Start/stop background music and track game start time
   useEffect(() => {
     if (roomState?.phase === RoomPhase.PLAYING) {
       startBackgroundMusic();
+      // Track game start time for stats
+      if (gameStartTimeRef.current === null) {
+        gameStartTimeRef.current = Date.now();
+      }
     }
     return () => stopBackgroundMusic();
   }, [roomState?.phase]);
+
+  // Record game stats when game ends
+  useEffect(() => {
+    if (roomState?.phase === RoomPhase.GAME_OVER && !statsRecordedRef.current && gameStartTimeRef.current !== null) {
+      statsRecordedRef.current = true;
+
+      const you = roomState.players.find(p => p.isYou);
+      if (!you) return;
+
+      // You win if you have 0 cards OR you're the last player standing
+      const isWin = you.cardsRemaining === 0 ||
+        (roomState.gameEndReason === 'last_player_standing' && roomState.players.filter(p => p.cardsRemaining > 0).length <= 1 && you.cardsRemaining > 0);
+
+      const gameDurationMs = Date.now() - gameStartTimeRef.current;
+      const builtInSet = roomState.config?.cardSetId ? getCardSetById(roomState.config.cardSetId) : undefined;
+      const cardSetName = roomState.config?.customSetName || builtInSet?.name || roomState.config?.cardSetId || 'default';
+
+      const payload: RecordGamePayload = {
+        mode: 'multiplayer',
+        isWin,
+        winReason: roomState.gameEndReason,
+        gameDurationMs,
+        context: {
+          cardLayout: roomState.config?.cardLayout || CardLayout.ORDERLY,
+          cardSetId: roomState.config?.cardSetId || 'default',
+          cardSetName,
+          playerCount: roomState.players.length,
+        },
+      };
+
+      recordGameResult(payload);
+    }
+  }, [roomState?.phase, roomState?.players, roomState?.gameEndReason, roomState?.config, recordGameResult]);
 
   // Play sounds on round winner
   useEffect(() => {
@@ -116,12 +160,15 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }
   }, [roomState?.rejoinWindowEndsAt]);
 
-  // Reset hasClickedPlayAgain when we leave GAME_OVER phase (room was reset)
+  // Reset state when we leave GAME_OVER phase (room was reset)
   useEffect(() => {
     if (roomState?.phase !== RoomPhase.GAME_OVER) {
       setHasClickedPlayAgain(false);
       setVictoryCelebrationShown(false);
       setShowVictoryCelebration(false);
+      // Reset stats tracking for next game
+      gameStartTimeRef.current = null;
+      statsRecordedRef.current = false;
     }
   }, [roomState?.phase]);
 

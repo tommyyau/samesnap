@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { GameConfig, Player, CardData, SymbolItem, GameState, GameDuration } from '../../shared/types';
+import { GameConfig, Player, CardData, SymbolItem, GameState, GameDuration, RecordGamePayload } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
-import { getSymbolsForCardSet } from '../../shared/cardSets';
+import { getSymbolsForCardSet, getCardSetById } from '../../shared/cardSets';
 import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
 import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES } from '../../constants';
 import Card from '../Card';
 import { Trophy, XCircle, Zap } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
+import { useUserStats } from '../../hooks/useUserStats';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -30,6 +31,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
   // Refs for bot timers
   const botTimers = useRef<{ [key: string]: number }>({});
+
+  // Game start time for stats tracking
+  const gameStartTimeRef = useRef<number>(Date.now());
+
+  // User stats hook for recording game results
+  const { recordGameResult } = useUserStats();
 
   // Helper to clear timers
   const clearAllBotTimers = useCallback(() => {
@@ -92,6 +99,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
     clearAllBotTimers();
+    // Reset game start time for stats tracking
+    gameStartTimeRef.current = Date.now();
     // Get symbols - use custom symbols if provided, otherwise look up by cardSetId
     let symbols: SymbolItem[];
     if (config.customSymbols && config.customSymbols.length === 57) {
@@ -281,6 +290,26 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     setLastWinnerId(winnerId || null);
     stopBackgroundMusic();
     playVictorySound();
+
+    // Record game stats (fire-and-forget)
+    const isWin = winnerId === 'player';
+    const gameDurationMs = Date.now() - gameStartTimeRef.current;
+    const builtInSet = getCardSetById(config.cardSetId);
+    const cardSetName = config.customSetName || builtInSet?.name || config.cardSetId;
+
+    const payload: RecordGamePayload = {
+      mode: 'singleplayer',
+      isWin,
+      gameDurationMs,
+      context: {
+        botDifficulty: config.difficulty,
+        cardLayout: config.cardLayout,
+        cardSetId: config.cardSetId,
+        cardSetName,
+        playerCount: 1 + config.botCount,
+      },
+    };
+    recordGameResult(payload);
 
     // Show victory celebration for 3 seconds before scoreboard
     setGameState(GameState.VICTORY_CELEBRATION);
