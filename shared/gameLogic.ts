@@ -55,13 +55,6 @@ export const shuffle = <T,>(array: T[]): T[] => {
   return newArray;
 };
 
-// Check if two cards match on a specific symbol ID
-export const checkMatch = (cardA: CardData, cardB: CardData, symbolId: number): boolean => {
-  const hasInA = cardA.symbols.some(s => s.id === symbolId);
-  const hasInB = cardB.symbols.some(s => s.id === symbolId);
-  return hasInA && hasInB;
-};
-
 // Find the matching symbol between two cards (helper for Bots)
 export const findMatch = (cardA: CardData, cardB: CardData): SymbolItem | undefined => {
   for (const symA of cardA.symbols) {

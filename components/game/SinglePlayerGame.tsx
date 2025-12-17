@@ -2,12 +2,16 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { GameConfig, Player, CardData, SymbolItem, GameState, GameDuration, RecordGamePayload } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
 import { getSymbolsForCardSet, getCardSetById } from '../../shared/cardSets';
-import { startBackgroundMusic, stopBackgroundMusic, playMatchSound, playErrorSound, playVictorySound } from '../../utils/sound';
-import { BOT_SPEEDS, PENALTY_DURATION, BOT_NAMES } from '../../constants';
+import { PENALTY_DURATION, BOT_NAMES } from '../../constants';
 import Card from '../Card';
-import { Trophy, XCircle, Zap } from 'lucide-react';
+import { XCircle, Zap } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { useUserStats } from '../../hooks/useUserStats';
+import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
+import { useBotAI } from '../../hooks/useBotAI';
+import { useGameAudio } from '../../hooks/useGameAudio';
+import { VictoryCelebration } from '../common/VictoryCelebration';
+import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
 
 interface SinglePlayerGameProps {
   config: GameConfig;
@@ -26,11 +30,10 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Highlighting State
   const [matchedSymbolId, setMatchedSymbolId] = useState<number | null>(null);
 
-  // Responsive State
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
-
-  // Refs for bot timers
-  const botTimers = useRef<{ [key: string]: number }>({});
+  // Responsive sizing - bot row is shorter than multiplayer opponent row
+  const { cardSize, isMobile, dimensions } = useResponsiveCardSize({
+    bottomRowHeight: { mobile: 48, desktop: 72 },
+  });
 
   // Game start time for stats tracking
   const gameStartTimeRef = useRef<number>(Date.now());
@@ -38,63 +41,54 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // User stats hook for recording game results
   const { recordGameResult } = useUserStats();
 
-  // Helper to clear timers
-  const clearAllBotTimers = useCallback(() => {
-    Object.values(botTimers.current).forEach((t) => clearTimeout(t as number));
-    botTimers.current = {};
-  }, []);
+  // Audio management - auto-starts music when playing, stops on game over
+  const isPlayingPhase = gameState === GameState.PLAYING || gameState === GameState.ROUND_ANIMATION;
+  const isGameOverPhase = gameState === GameState.VICTORY_CELEBRATION || gameState === GameState.GAME_OVER;
+  const { playMatch, playError, playVictory, stopMusic } = useGameAudio({
+    isPlaying: isPlayingPhase,
+    isGameOver: isGameOverPhase,
+  });
 
-  // Window Resize Listener
-  useEffect(() => {
-    const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Calculate responsive card size - optimized for mobile
-  const calculateCardSize = () => {
-    const { width, height } = dimensions;
-    const isMobile = width < 768;
-    const isPortrait = height > width;
-
-    // Tighter spacing on mobile
-    const topBarHeight = isMobile ? 40 : 48;
-    const botRowHeight = isMobile ? 48 : 72;  // Tiny bot indicators on mobile (extra space for badges)
-    const padding = isMobile ? 4 : 32;  // Less edge padding on mobile
-    const cardGap = isMobile ? 16 : 32;  // More gap between cards for breathing room
-
-    const availableHeight = height - topBarHeight - botRowHeight - padding * 2;
-    const availableWidth = width - padding * 2;
-
-    let cardSize: number;
-
-    if (isMobile && isPortrait) {
-      // Portrait mobile: cards stack vertically, can use full width
-      // Two cards + gap must fit in available height
-      const maxHeightPerCard = (availableHeight - cardGap) / 2;
-      const maxWidth = availableWidth * 0.85; // Cards can be 85% of screen width
-      cardSize = Math.min(maxHeightPerCard, maxWidth, 380);
-    } else if (isMobile) {
-      // Landscape mobile: cards side by side
-      const heightConstraint = availableHeight * 0.75;
-      const widthConstraint = (availableWidth - cardGap) / 2 * 0.9;
-      cardSize = Math.min(heightConstraint, widthConstraint, 380);
-    } else {
-      // Desktop/tablet: cards side by side with more padding
-      const heightConstraint = availableHeight * 0.6;
-      const widthConstraint = availableWidth * 0.35;
-      cardSize = Math.min(heightConstraint, widthConstraint, 380);
-    }
-
-    return Math.max(140, cardSize);
-  };
-
-  const cardSize = calculateCardSize();
-  const isMobile = dimensions.width < 768;
   // Tiny bot cards on mobile - just indicators, not detailed views
   const botCardSize = isMobile ? 32 : Math.max(50, cardSize * 0.25);
+
+  // Handle match found (by human or bot)
+  const handleMatchFound = useCallback((playerId: string, targetCenterCard: CardData) => {
+    // Prevent multiple matches firing at once
+    if (gameState !== GameState.PLAYING) return;
+
+    const winner = players.find(p => p.id === playerId);
+    if (!winner || winner.cardStack.length === 0) return;
+
+    const topCard = winner.cardStack[0];
+    // Find the symbol that matched for the highlight
+    const matchSymbol = findMatch(topCard, targetCenterCard);
+
+    // 1. Play Sound
+    const isHuman = !winner.isBot;
+    playMatch(isHuman ? -1 : parseInt(playerId.split('-')[1]), isHuman);
+
+    // 2. Set Highlight State
+    setMatchedSymbolId(matchSymbol?.id || null);
+    setLastWinnerId(playerId);
+    setGameState(GameState.ROUND_ANIMATION); // Pauses the game loop
+
+    setMessage(`${winner.name} found it!`);
+
+    // 3. Wait 2 seconds before moving to next round
+    setTimeout(() => {
+      proceedToNextTurn(playerId);
+    }, 2000);
+  }, [gameState, players, playMatch]);
+
+  // Bot AI - schedules bot moves and handles timing
+  const { clearAllBotTimers } = useBotAI({
+    players,
+    centerCard,
+    gameState,
+    difficulty: config.difficulty,
+    onBotMatch: handleMatchFound,
+  });
 
   // Initialize/Restart Game Logic
   const startNewGame = useCallback(() => {
@@ -121,8 +115,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     const deckSize = Math.min(gameDuration, generatedDeck.length);
     const deck = generatedDeck.slice(0, deckSize);
 
-    // Start background music (also called in Lobby for initial game, but needed for Play Again)
-    startBackgroundMusic();
+    // Note: Background music is auto-managed by useGameAudio hook
 
     // Shuffle the deck
     const shuffledDeck = shuffle([...deck]);
@@ -185,65 +178,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     startNewGame();
     return () => {
       clearAllBotTimers();
-      stopBackgroundMusic();
+      // Note: Music cleanup is handled by useGameAudio hook
     };
   }, [startNewGame, clearAllBotTimers]);
-
-  // Bot Logic System
-  useEffect(() => {
-    // Only run bots if the game is actively playing (not in animation/pause state)
-    if (gameState !== GameState.PLAYING || !centerCard) return;
-
-    // Schedule bots to find match
-    players.forEach(player => {
-      if (player.isBot && player.cardStack.length > 0) {
-        scheduleBotMove(player, centerCard);
-      }
-    });
-
-    return () => clearAllBotTimers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [centerCard, gameState, players]);
-
-  const scheduleBotMove = (bot: Player, currentCenter: CardData) => {
-    if (botTimers.current[bot.id]) clearTimeout(botTimers.current[bot.id]);
-
-    const speedRange = BOT_SPEEDS[config.difficulty];
-    // Random delay based on difficulty + some randomness
-    const reactionTime = Math.random() * (speedRange[1] - speedRange[0]) + speedRange[0];
-
-    botTimers.current[bot.id] = window.setTimeout(() => {
-      handleMatchFound(bot.id, currentCenter);
-    }, reactionTime);
-  };
-
-  const handleMatchFound = (playerId: string, targetCenterCard: CardData) => {
-    // Prevent multiple matches firing at once
-    if (gameState !== GameState.PLAYING) return;
-
-    const winner = players.find(p => p.id === playerId);
-    if (!winner || winner.cardStack.length === 0) return;
-
-    const topCard = winner.cardStack[0];
-    // Find the symbol that matched for the highlight
-    const matchSymbol = findMatch(topCard, targetCenterCard);
-
-    // 1. Play Sound
-    const isHuman = !winner.isBot;
-    playMatchSound(isHuman ? -1 : parseInt(playerId.split('-')[1]), isHuman);
-
-    // 2. Set Highlight State
-    setMatchedSymbolId(matchSymbol?.id || null);
-    setLastWinnerId(playerId);
-    setGameState(GameState.ROUND_ANIMATION); // Pauses the game loop
-
-    setMessage(`${winner.name} found it!`);
-
-    // 3. Wait 2 seconds before moving to next round
-    setTimeout(() => {
-      proceedToNextTurn(playerId);
-    }, 2000);
-  };
 
   const proceedToNextTurn = (winnerId: string) => {
     // Find the winner and their top card BEFORE state updates
@@ -288,8 +225,8 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   const endGame = (winnerId?: string) => {
     clearAllBotTimers();
     setLastWinnerId(winnerId || null);
-    stopBackgroundMusic();
-    playVictorySound();
+    // Note: Music is auto-stopped by useGameAudio when isGameOver becomes true
+    playVictory();
 
     // Record game stats (fire-and-forget)
     const isWin = winnerId === 'player';
@@ -339,7 +276,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
       handleMatchFound(human.id, centerCard);
     } else {
       // Penalty
-      playErrorSound();
+      playError();
       setPenaltyUntil(now + PENALTY_DURATION);
       setMessage("Miss! 3s Penalty!");
     }
@@ -367,7 +304,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
   // Exit handler
   const handleExit = () => {
-    stopBackgroundMusic();
+    stopMusic();
     onExit();
   };
 
@@ -376,43 +313,12 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     const sortedPlayers = [...players].sort((a, b) => a.cardStack.length - b.cardStack.length);
     const winner = sortedPlayers[0];
     const isHumanWinner = winner?.id === 'player';
-    const confettiEmojis = ['🎉', '🎊', '🎈', '⭐', '✨', '🌟', '🏆'];
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 overflow-hidden">
-        {/* Winner text */}
-        <div className="text-center z-10">
-          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-lg mb-4 animate-bounce">
-            {isHumanWinner ? 'YOU WIN!' : `${winner?.name} WINS!`}
-          </div>
-        </div>
-
-        {/* Floating confetti emojis */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute text-4xl md:text-5xl"
-              style={{
-                left: `${(i * 5) % 100}%`,
-                bottom: '-10%',
-                animation: `floatUp ${2 + (i % 3)}s ease-out forwards`,
-                animationDelay: `${(i * 0.1) % 1}s`,
-              }}
-            >
-              {confettiEmojis[i % confettiEmojis.length]}
-            </div>
-          ))}
-        </div>
-
-        {/* CSS for float animation */}
-        <style>{`
-          @keyframes floatUp {
-            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-            100% { transform: translateY(-120vh) rotate(360deg); opacity: 0; }
-          }
-        `}</style>
-      </div>
+      <VictoryCelebration
+        winnerName={winner?.name || 'Unknown'}
+        isPlayerWinner={isHumanWinner}
+      />
     );
   }
 
@@ -422,45 +328,22 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     const winner = sortedPlayers[0];
     const isHumanWinner = winner.id === 'player';
 
+    // Convert to PlayerScore format for the shared component
+    const playerScores: PlayerScore[] = sortedPlayers.map(p => ({
+      id: p.id,
+      name: p.name,
+      cardsRemaining: p.cardStack.length,
+    }));
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white p-4 animate-fadeIn">
-        <div className="bg-white text-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center flex flex-col max-h-[90vh]">
-          <div className="shrink-0">
-            <Trophy className={`w-24 h-24 mx-auto mb-4 ${isHumanWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
-            <h2 className="text-4xl font-bold mb-2">{isHumanWinner ? 'You Won!' : `${winner.name} Wins!`}</h2>
-            <p className="text-gray-500 mb-6">Final Standings</p>
-          </div>
-
-          <div className="space-y-3 mb-8 overflow-y-auto flex-1">
-            {sortedPlayers.map((p, idx) => (
-              <div key={p.id} className="flex justify-between items-center p-3 bg-gray-100 rounded-xl font-bold">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400 w-6">#{idx + 1}</span>
-                  <span>{p.name}</span>
-                </div>
-                <span className={p.cardStack.length === 0 ? 'text-green-600' : 'text-indigo-600'}>
-                  {p.cardStack.length === 0 ? 'WINNER!' : p.cardStack.length}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex gap-4 justify-center shrink-0">
-            <button
-              onClick={handleExit}
-              className="px-6 py-3 rounded-xl bg-gray-200 hover:bg-gray-300 font-bold text-gray-700 transition"
-            >
-              Exit
-            </button>
-            <button
-              onClick={startNewGame}
-              className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition shadow-lg"
-            >
-              Play Again
-            </button>
-          </div>
-        </div>
-      </div>
+      <GameOverScoreboard
+        players={playerScores}
+        isPlayerWinner={isHumanWinner}
+        winnerName={winner.name}
+        onPlayAgain={startNewGame}
+        onExit={handleExit}
+        variant="singleplayer"
+      />
     );
   }
 

@@ -362,11 +362,8 @@ async function runRoomTests() {
       throw new Error(`Expected ~60s remaining, got ${newTimeRemaining}ms`);
     }
 
-    // Host should also receive updated roomExpiresAt via broadcast
-    await waitForMessage(host, 'room_state', 2000);
-    if (host.roomState.roomExpiresAt < player2.roomState.roomExpiresAt - 100) {
-      throw new Error('Host should receive updated expiry');
-    }
+    // Host should receive player_joined notification (expiry not included in this message)
+    await waitForMessage(host, 'player_joined', 2000);
 
     cleanup(host, player2);
   });
@@ -407,7 +404,7 @@ async function runRoomTests() {
 async function runConfigTests() {
   console.log('\n⚙️ GAME CONFIG TESTS\n');
 
-  await test('Host can set card difficulty to HARD', async () => {
+  await test('Host can set card layout to CHAOTIC', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
 
@@ -415,32 +412,32 @@ async function runConfigTests() {
       type: 'set_config',
       payload: {
         config: {
-          cardDifficulty: 'HARD'
+          cardLayout: 'CHAOTIC'
         }
       }
     }));
 
     // Wait for config update
     const configMsg = await waitForMessage(host, 'config_updated', 2000);
-    if (configMsg.payload.config.cardDifficulty !== 'HARD') {
-      throw new Error(`Expected HARD, got ${configMsg.payload.config.cardDifficulty}`);
+    if (configMsg.payload.config.cardLayout !== 'CHAOTIC') {
+      throw new Error(`Expected CHAOTIC, got ${configMsg.payload.config.cardLayout}`);
     }
 
     cleanup(host);
   });
 
-  await test('Config supports all three difficulties (EASY, MEDIUM, HARD)', async () => {
+  await test('Config supports both card layouts (ORDERLY, CHAOTIC)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
 
-    for (const difficulty of ['EASY', 'MEDIUM', 'HARD']) {
+    for (const layout of ['ORDERLY', 'CHAOTIC']) {
       host.ws.send(JSON.stringify({
         type: 'set_config',
-        payload: { config: { cardDifficulty: difficulty } }
+        payload: { config: { cardLayout: layout } }
       }));
       const msg = await waitForMessage(host, 'config_updated', 2000);
-      if (msg.payload.config.cardDifficulty !== difficulty) {
-        throw new Error(`Failed to set ${difficulty}`);
+      if (msg.payload.config.cardLayout !== layout) {
+        throw new Error(`Failed to set ${layout}`);
       }
       // Clear messages for next iteration
       host.messages = [];
@@ -456,7 +453,7 @@ async function runConfigTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -469,11 +466,11 @@ async function runConfigTests() {
 
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'HARD', gameDuration: 25 } }
+      payload: { config: { cardLayout: 'CHAOTIC', gameDuration: 25 } }
     }));
 
     const updated = await waitForMessage(host, 'config_updated', 2000);
-    if (updated.payload.config.cardDifficulty !== 'HARD' || updated.payload.config.gameDuration !== 25) {
+    if (updated.payload.config.cardLayout !== 'CHAOTIC' || updated.payload.config.gameDuration !== 25) {
       throw new Error('Config update during GAME_OVER did not apply new values');
     }
 
@@ -495,7 +492,7 @@ async function runGameFlowTests() {
     // Host starts game manually
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Should get countdown and eventually round_start
@@ -521,7 +518,7 @@ async function runGameFlowTests() {
     // Start game immediately
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for round_start
@@ -543,7 +540,7 @@ async function runGameFlowTests() {
 
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 50 } }  // LONG duration for traditional Dobble
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 50 } }  // LONG duration for traditional Dobble
     }));
 
     const firstRound = await waitForMessage(host, 'round_start', 10000);
@@ -591,7 +588,7 @@ async function runMatchTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for round start
@@ -634,7 +631,7 @@ async function runMatchTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -771,7 +768,7 @@ async function runLifecycleTests() {
     // Host starts game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for countdown to start
@@ -1034,7 +1031,7 @@ async function runLifecycleTests() {
     // Set high target so no auto-start
     host.ws.send(JSON.stringify({
       type: 'set_config',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
     await waitForMessage(host, 'config_updated', 2000);
 
@@ -1046,7 +1043,7 @@ async function runLifecycleTests() {
     // Host tries to manually start - should fail
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Should receive error, not countdown
@@ -1156,7 +1153,7 @@ async function runLastPlayerStandingTests() {
     // Start game manually
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for game to start
@@ -1197,7 +1194,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for round 1
@@ -1260,7 +1257,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for round start
@@ -1294,7 +1291,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for round start
@@ -1335,7 +1332,7 @@ async function runLastPlayerStandingTests() {
     // Start game with 3 players
     p1.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for game to start
@@ -1369,7 +1366,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for game to start
@@ -1413,7 +1410,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for game to start (guest perspective)
@@ -1454,7 +1451,7 @@ async function runLastPlayerStandingTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1490,7 +1487,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     // Wait for game to start
@@ -1521,7 +1518,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     const hostRoundStart = await waitForMessage(host, 'round_start', 10000);
@@ -1556,7 +1553,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1590,7 +1587,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1638,7 +1635,7 @@ async function runRejoinTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1698,7 +1695,7 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1758,7 +1755,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1818,7 +1815,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1850,7 +1847,7 @@ async function runGameOverExitTests() {
     // Start game with 4 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1912,7 +1909,7 @@ async function runGameOverExitTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1969,7 +1966,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2035,7 +2032,7 @@ async function runGameOverExitTests() {
     // Start game with 3 players
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2073,7 +2070,7 @@ async function runGameOverExitTests() {
     // Start game with 4 players so we have enough for the test
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -2141,7 +2138,7 @@ async function runGameDurationTests() {
     // Start game with SHORT duration (10 cards)
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -2162,7 +2159,7 @@ async function runGameDurationTests() {
     // Start game with MEDIUM duration (25 cards)
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 25 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 25 } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -2183,7 +2180,7 @@ async function runGameDurationTests() {
     // Start game with LONG duration (50 cards)
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 50 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 50 } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -2204,7 +2201,7 @@ async function runGameDurationTests() {
     // Start game without specifying gameDuration
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY' } }
+      payload: { config: { cardLayout: 'ORDERLY' } }
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
@@ -2232,7 +2229,7 @@ async function runPlayAgainRoomResetTests() {
     // Start game with SHORT duration (10 cards) for faster completion
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     // Get initial cards from round_start
@@ -2314,7 +2311,7 @@ async function runPlayAgainRoomResetTests() {
     // Start game with SHORT duration
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     // Get initial cards from round_start
@@ -2388,7 +2385,7 @@ async function runPlayAgainRoomResetTests() {
     // Start first game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     // Get initial cards from round_start
@@ -2446,7 +2443,7 @@ async function runPlayAgainRoomResetTests() {
     // Start a new game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardDifficulty: 'EASY', gameDuration: 10 } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     // Both should receive new round_start

@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardLayout, RecordGamePayload } from '../../shared/types';
-import { playMatchSound, playErrorSound, startBackgroundMusic, stopBackgroundMusic, playVictorySound, unlockAudio } from '../../utils/sound';
 import { getCardSetById } from '../../shared/cardSets';
 import Card from '../Card';
-import { Trophy, XCircle, Zap, Wifi, AlertCircle } from 'lucide-react';
+import { XCircle, Zap, Wifi } from 'lucide-react';
+import { ConnectionErrorModal } from '../common/ConnectionErrorModal';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { useUserStats } from '../../hooks/useUserStats';
+import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
+import { useGameAudio } from '../../hooks/useGameAudio';
+import { VictoryCelebration } from '../common/VictoryCelebration';
+import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -19,74 +23,35 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const { roomState, latency, connectionError, attemptMatch, leaveRoom, playAgain, clearError } = multiplayerHook;
 
   const [penaltyTimeLeft, setPenaltyTimeLeft] = useState(0);
-  const [dimensions, setDimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
   const [rejoinTimeLeft, setRejoinTimeLeft] = useState(0);
   const [hasClickedPlayAgain, setHasClickedPlayAgain] = useState(false);
   const [showVictoryCelebration, setShowVictoryCelebration] = useState(false);
   const [victoryCelebrationShown, setVictoryCelebrationShown] = useState(false);
+
+  // Responsive sizing - opponent row is taller than single-player bot row
+  const { cardSize } = useResponsiveCardSize({
+    bottomRowHeight: { mobile: 48, desktop: 90 },
+  });
 
   // Game stats tracking
   const gameStartTimeRef = useRef<number | null>(null);
   const statsRecordedRef = useRef(false);
   const { recordGameResult } = useUserStats();
 
-  // Window Resize Listener
+  // Audio management - auto-starts music when playing, stops on game over
+  const isPlayingPhase = roomState?.phase === RoomPhase.PLAYING;
+  const isGameOverPhase = roomState?.phase === RoomPhase.GAME_OVER;
+  const { playMatch, playError, playVictory, unlockAudio, stopMusic } = useGameAudio({
+    isPlaying: isPlayingPhase || false,
+    isGameOver: isGameOverPhase || false,
+  });
+
+  // Track game start time when game starts
+  // Note: Background music is auto-managed by useGameAudio hook
   useEffect(() => {
-    const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  // Calculate responsive card size - optimized for mobile
-  const calculateCardSize = () => {
-    const { width, height } = dimensions;
-    const isMobile = width < 768;
-    const isPortrait = height > width;
-
-    // Tighter spacing on mobile
-    const topBarHeight = isMobile ? 40 : 48;
-    const opponentRowHeight = isMobile ? 48 : 90;  // Tiny opponent indicators on mobile (extra space for badges)
-    const padding = isMobile ? 4 : 32;  // Less edge padding on mobile
-    const cardGap = isMobile ? 16 : 32;  // More gap between cards for breathing room
-
-    const availableHeight = height - topBarHeight - opponentRowHeight - padding * 2;
-    const availableWidth = width - padding * 2;
-
-    let cardSize: number;
-
-    if (isMobile && isPortrait) {
-      // Portrait mobile: cards stack vertically, can use full width
-      // Two cards + gap must fit in available height
-      const maxHeightPerCard = (availableHeight - cardGap) / 2;
-      const maxWidth = availableWidth * 0.85; // Cards can be 85% of screen width
-      cardSize = Math.min(maxHeightPerCard, maxWidth, 380);
-    } else if (isMobile) {
-      // Landscape mobile: cards side by side
-      const heightConstraint = availableHeight * 0.75;
-      const widthConstraint = (availableWidth - cardGap) / 2 * 0.9;
-      cardSize = Math.min(heightConstraint, widthConstraint, 380);
-    } else {
-      // Desktop/tablet: cards side by side with more padding
-      const heightConstraint = availableHeight * 0.6;
-      const widthConstraint = availableWidth * 0.35;
-      cardSize = Math.min(heightConstraint, widthConstraint, 380);
+    if (roomState?.phase === RoomPhase.PLAYING && gameStartTimeRef.current === null) {
+      gameStartTimeRef.current = Date.now();
     }
-
-    return Math.max(140, cardSize);
-  };
-
-  // Start/stop background music and track game start time
-  useEffect(() => {
-    if (roomState?.phase === RoomPhase.PLAYING) {
-      startBackgroundMusic();
-      // Track game start time for stats
-      if (gameStartTimeRef.current === null) {
-        gameStartTimeRef.current = Date.now();
-      }
-    }
-    return () => stopBackgroundMusic();
   }, [roomState?.phase]);
 
   // Record game stats when game ends
@@ -126,14 +91,14 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   useEffect(() => {
     if (roomState?.phase === RoomPhase.ROUND_END && roomState.roundWinnerId) {
       const isYouWinner = roomState.players.find(p => p.isYou)?.id === roomState.roundWinnerId;
-      playMatchSound(-1, isYouWinner);
+      playMatch(-1, isYouWinner);
     }
-  }, [roomState?.phase, roomState?.roundWinnerId, roomState?.players]);
+  }, [roomState?.phase, roomState?.roundWinnerId, roomState?.players, playMatch]);
 
   // Penalty countdown
   useEffect(() => {
     if (roomState?.penaltyUntil && roomState.penaltyUntil > Date.now()) {
-      playErrorSound();
+      playError();
       const interval = setInterval(() => {
         const left = Math.max(0, Math.ceil((roomState.penaltyUntil! - Date.now()) / 1000));
         setPenaltyTimeLeft(left);
@@ -143,7 +108,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     } else {
       setPenaltyTimeLeft(0);
     }
-  }, [roomState?.penaltyUntil]);
+  }, [roomState?.penaltyUntil, playError]);
 
   // Rejoin window countdown
   useEffect(() => {
@@ -173,19 +138,19 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   }, [roomState?.phase]);
 
   // Victory celebration when game ends
+  // Note: Music is auto-stopped by useGameAudio when isGameOver becomes true
   useEffect(() => {
     if (roomState?.phase === RoomPhase.GAME_OVER && !victoryCelebrationShown) {
       setVictoryCelebrationShown(true);
       setShowVictoryCelebration(true);
-      stopBackgroundMusic();
-      playVictorySound();
+      playVictory();
 
       // Hide celebration after 3 seconds to show scoreboard
       setTimeout(() => {
         setShowVictoryCelebration(false);
       }, 3000);
     }
-  }, [roomState?.phase, victoryCelebrationShown]);
+  }, [roomState?.phase, victoryCelebrationShown, playVictory]);
 
   const handleSymbolClick = (symbol: SymbolItem) => {
     if (roomState?.phase !== RoomPhase.PLAYING) return;
@@ -196,7 +161,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   };
 
   const handleExit = () => {
-    stopBackgroundMusic();
+    stopMusic();
     leaveRoom();
     onExit();
   };
@@ -240,43 +205,12 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     const sortedPlayers = [...roomState.players].sort((a, b) => a.cardsRemaining - b.cardsRemaining);
     const winner = sortedPlayers[0];
     const isYouWinner = winner?.isYou;
-    const confettiEmojis = ['🎉', '🎊', '🎈', '⭐', '✨', '🌟', '🏆'];
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 overflow-hidden">
-        {/* Winner text */}
-        <div className="text-center z-10">
-          <div className="text-5xl md:text-7xl font-black text-white drop-shadow-lg mb-4 animate-bounce">
-            {isYouWinner ? 'YOU WIN!' : `${winner?.name} WINS!`}
-          </div>
-        </div>
-
-        {/* Floating confetti emojis */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          {Array.from({ length: 20 }).map((_, i) => (
-            <div
-              key={i}
-              className="absolute text-4xl md:text-5xl"
-              style={{
-                left: `${(i * 5) % 100}%`,
-                bottom: '-10%',
-                animation: `floatUp ${2 + (i % 3)}s ease-out forwards`,
-                animationDelay: `${(i * 0.1) % 1}s`,
-              }}
-            >
-              {confettiEmojis[i % confettiEmojis.length]}
-            </div>
-          ))}
-        </div>
-
-        {/* CSS for float animation */}
-        <style>{`
-          @keyframes floatUp {
-            0% { transform: translateY(0) rotate(0deg); opacity: 1; }
-            100% { transform: translateY(-120vh) rotate(360deg); opacity: 0; }
-          }
-        `}</style>
-      </div>
+      <VictoryCelebration
+        winnerName={winner?.name || 'Unknown'}
+        isPlayerWinner={isYouWinner || false}
+      />
     );
   }
 
@@ -285,83 +219,38 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     // Sort by cards remaining ascending (0 = winner)
     const sortedPlayers = [...roomState.players].sort((a, b) => a.cardsRemaining - b.cardsRemaining);
     const winner = sortedPlayers[0];
-    const isYouWinner = winner?.isYou;
+    const isYouWinner = winner?.isYou || false;
     const isLastPlayerStanding = roomState.gameEndReason === 'last_player_standing';
     const playersWantingRematch = roomState.playersWantRematch || [];
     const you = roomState.players.find(p => p.isYou);
     const youWantRematch = you && playersWantingRematch.includes(you.id);
     const canPlayAgain = rejoinTimeLeft > 0 && !hasClickedPlayAgain && !youWantRematch;
 
+    // Convert to PlayerScore format for the shared component
+    const playerScores: PlayerScore[] = sortedPlayers.map(p => ({
+      id: p.id,
+      name: p.name,
+      cardsRemaining: p.cardsRemaining,
+      isYou: p.isYou,
+      wantsRematch: playersWantingRematch.includes(p.id),
+    }));
+
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white p-4">
-        <div className="bg-white text-slate-800 p-8 rounded-3xl shadow-2xl max-w-lg w-full text-center">
-          <Trophy className={`w-24 h-24 mx-auto mb-4 ${isYouWinner ? 'text-yellow-400' : 'text-gray-400'}`} />
-
-          {isLastPlayerStanding && isYouWinner ? (
-            <>
-              <h2 className="text-4xl font-bold mb-2">Last One Standing!</h2>
-              <p className="text-gray-500 mb-6">Everyone else left - You win!</p>
-            </>
-          ) : (
-            <>
-              <h2 className="text-4xl font-bold mb-2">{isYouWinner ? 'You Won!' : `${winner?.name} Wins!`}</h2>
-              <p className="text-gray-500 mb-6">Final Standings</p>
-            </>
-          )}
-
-          <div className="space-y-3 mb-6">
-            {sortedPlayers.map((p, idx) => {
-              const wantsRematch = playersWantingRematch.includes(p.id);
-              return (
-                <div key={p.id} className={`flex justify-between items-center p-3 rounded-xl font-bold ${p.isYou ? 'bg-indigo-100' : 'bg-gray-100'}`}>
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-400 w-6">#{idx + 1}</span>
-                    <span>{p.name}</span>
-                    {p.isYou && <span className="text-xs text-indigo-500">(You)</span>}
-                    {wantsRematch && <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Ready</span>}
-                  </div>
-                  <span className={p.cardsRemaining === 0 ? 'text-green-600' : 'text-indigo-600'}>
-                    {p.cardsRemaining === 0 ? 'WINNER!' : p.cardsRemaining}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Rejoin window status */}
-          {rejoinTimeLeft > 0 && (
-            <div className="mb-4 text-sm text-gray-500">
-              {playersWantingRematch.length > 0 ? (
-                <span>{playersWantingRematch.length} player(s) ready for rematch</span>
-              ) : (
-                <span>Rematch window: {rejoinTimeLeft}s</span>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-3 justify-center">
-            {canPlayAgain && (
-              <button
-                onClick={handlePlayAgain}
-                className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold transition"
-              >
-                Rejoin Room
-              </button>
-            )}
-            {(hasClickedPlayAgain || youWantRematch) && rejoinTimeLeft > 0 && (
-              <button
-                disabled
-                className="px-6 py-3 rounded-xl bg-gray-400 text-white font-bold cursor-not-allowed"
-              >
-                Waiting for others... ({rejoinTimeLeft}s)
-              </button>
-            )}
-            <button onClick={handleExit} className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold transition">
-              Back to Lobby
-            </button>
-          </div>
-        </div>
-      </div>
+      <GameOverScoreboard
+        players={playerScores}
+        isPlayerWinner={isYouWinner}
+        winnerName={winner?.name || 'Unknown'}
+        onPlayAgain={handlePlayAgain}
+        onExit={handleExit}
+        variant="multiplayer"
+        isLastPlayerStanding={isLastPlayerStanding}
+        rejoinTimeLeft={rejoinTimeLeft}
+        playersWantingRematchCount={playersWantingRematch.length}
+        canPlayAgain={canPlayAgain}
+        waitingForOthers={hasClickedPlayAgain || !!youWantRematch}
+        playAgainLabel="Rejoin Room"
+        exitLabel="Back to Lobby"
+      />
     );
   }
 
@@ -369,7 +258,6 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const opponents = roomState.players.filter(p => !p.isYou);
   const isPenaltyActive = penaltyTimeLeft > 0;
   const isAnimating = roomState.phase === RoomPhase.ROUND_END;
-  const cardSize = calculateCardSize();
   const isYouWinner = isAnimating && you?.id === roomState.roundWinnerId;
   const isOpponentWinner = isAnimating && !isYouWinner && roomState.roundWinnerId;
 
@@ -388,29 +276,13 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     <>
       {/* Connection Error Modal */}
       {connectionError && (
-        <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
-            <div className="text-red-500 mb-4">
-              <AlertCircle size={48} className="mx-auto" />
-            </div>
-            <h3 className="text-xl font-bold text-gray-800 mb-2">Connection Lost</h3>
-            <p className="text-gray-600 mb-6">{connectionError}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={handleErrorExit}
-                className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl font-semibold transition-all"
-              >
-                Exit Game
-              </button>
-              <button
-                onClick={handleErrorRetry}
-                className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-semibold transition-all"
-              >
-                Reconnect
-              </button>
-            </div>
-          </div>
-        </div>
+        <ConnectionErrorModal
+          error={connectionError}
+          onRetry={handleErrorRetry}
+          onLeave={handleErrorExit}
+          retryLabel="Reconnect"
+          leaveLabel="Exit Game"
+        />
       )}
 
       <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative safe-all">

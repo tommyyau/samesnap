@@ -127,6 +127,7 @@ function App() {
     playerName: string;
   } | null>(null);
   const [editingCardSet, setEditingCardSet] = useState<CardSet | null>(null);
+  const [editorOrigin, setEditorOrigin] = useState<'lobby' | 'drawer'>('lobby');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [profileDrawerOpen, setProfileDrawerOpen] = useState(false);
@@ -138,15 +139,17 @@ function App() {
   };
 
   // Card Set Editor handlers
-  const handleCreateCardSet = useCallback(() => {
+  const handleCreateCardSet = useCallback((origin: 'lobby' | 'drawer' = 'lobby') => {
     setEditingCardSet(null); // null means creating new
     setSaveError(null);
+    setEditorOrigin(origin);
     setMode(AppMode.CARD_SET_EDITOR);
   }, []);
 
-  const handleEditCardSet = useCallback((cardSet: CardSet) => {
+  const handleEditCardSet = useCallback((cardSet: CardSet, origin: 'lobby' | 'drawer' = 'lobby') => {
     setEditingCardSet(cardSet);
     setSaveError(null);
+    setEditorOrigin(origin);
     setMode(AppMode.CARD_SET_EDITOR);
   }, []);
 
@@ -166,7 +169,13 @@ function App() {
 
       if (result) {
         setEditingCardSet(null);
-        setMode(AppMode.SINGLE_PLAYER_LOBBY);
+        // Return to origin screen
+        if (editorOrigin === 'drawer') {
+          setMode(AppMode.MENU);
+          setCardSetsDrawerOpen(true);
+        } else {
+          setMode(AppMode.SINGLE_PLAYER_LOBBY);
+        }
       } else {
         setSaveError('Failed to save card set. Please try again.');
       }
@@ -176,7 +185,7 @@ function App() {
     } finally {
       setIsSaving(false);
     }
-  }, [editingCardSet, createSet, updateSet]);
+  }, [editingCardSet, createSet, updateSet, editorOrigin]);
 
   const handleDeleteCardSet = useCallback(async () => {
     if (editingCardSet) {
@@ -185,19 +194,31 @@ function App() {
         const success = await deleteSet(editingCardSet.id);
         if (success) {
           setEditingCardSet(null);
-          setMode(AppMode.SINGLE_PLAYER_LOBBY);
+          // Return to origin screen
+          if (editorOrigin === 'drawer') {
+            setMode(AppMode.MENU);
+            setCardSetsDrawerOpen(true);
+          } else {
+            setMode(AppMode.SINGLE_PLAYER_LOBBY);
+          }
         }
       } finally {
         setIsSaving(false);
       }
     }
-  }, [editingCardSet, deleteSet]);
+  }, [editingCardSet, deleteSet, editorOrigin]);
 
   const handleCancelCardSetEditor = useCallback(() => {
     setEditingCardSet(null);
     setSaveError(null);
-    setMode(AppMode.SINGLE_PLAYER_LOBBY);
-  }, []);
+    // Return to origin screen
+    if (editorOrigin === 'drawer') {
+      setMode(AppMode.MENU);
+      setCardSetsDrawerOpen(true);
+    } else {
+      setMode(AppMode.SINGLE_PLAYER_LOBBY);
+    }
+  }, [editorOrigin]);
 
   const handleCreateRoom = (playerName: string) => {
     const roomCode = generateRoomCode();
@@ -289,12 +310,8 @@ function App() {
           <SinglePlayerLobby
             onStart={handleStartSinglePlayer}
             onBack={handleBackToMenu}
-            onCreateCardSet={handleCreateCardSet}
-            onEditCardSet={handleEditCardSet}
             customSets={customSets}
             isLoadingCardSets={isLoadingCardSets}
-            canCreate={canCreate}
-            onDeleteCardSet={deleteSet}
           />
         )}
 
@@ -337,9 +354,12 @@ function App() {
         <CardSetsDrawer
           isOpen={cardSetsDrawerOpen}
           onClose={() => setCardSetsDrawerOpen(false)}
-          onManage={() => setMode(AppMode.SINGLE_PLAYER_LOBBY)}
+          onCreateCardSet={() => handleCreateCardSet('drawer')}
+          onEditCardSet={(cardSet) => handleEditCardSet(cardSet, 'drawer')}
+          onDeleteCardSet={deleteSet}
           cardSets={customSets}
           isLoading={isLoadingCardSets}
+          canCreate={canCreate}
         />
       </div>
     </ErrorBoundary>

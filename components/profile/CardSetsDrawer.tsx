@@ -1,23 +1,53 @@
-import React, { useEffect } from 'react';
-import { X, Loader2, Layers, Plus, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Loader2, Layers, Plus, Pencil, Trash2 } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
 import type { CardSet } from '../../shared/types';
+import { ConfirmModal } from '../common/ConfirmModal';
 
 interface CardSetsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  onManage: () => void;
+  onCreateCardSet: () => void;
+  onEditCardSet: (cardSet: CardSet) => void;
+  onDeleteCardSet: (id: string) => Promise<boolean>;
   cardSets: CardSet[];
   isLoading: boolean;
+  canCreate: boolean;
 }
 
 interface CardSetCardProps {
   cardSet: CardSet;
+  onEdit: () => void;
+  onDelete: () => void;
 }
 
-const CardSetCard: React.FC<CardSetCardProps> = ({ cardSet }) => (
-  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-    <h3 className="font-semibold text-gray-800 mb-2">{cardSet.name}</h3>
+const CardSetCard: React.FC<CardSetCardProps> = ({ cardSet, onEdit, onDelete }) => (
+  <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 group relative">
+    <div className="flex items-center justify-between mb-2">
+      <h3 className="font-semibold text-gray-800">{cardSet.name}</h3>
+      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          className="p-1.5 bg-gray-100 hover:bg-indigo-100 rounded-lg text-gray-500 hover:text-indigo-600 transition-colors"
+          title="Edit"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="p-1.5 bg-gray-100 hover:bg-red-100 rounded-lg text-gray-500 hover:text-red-600 transition-colors"
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </div>
     <div className="flex flex-wrap gap-1 text-lg leading-none">
       {cardSet.symbols.slice(0, 57).map((symbol, idx) => (
         <span key={idx} title={symbol.name}>
@@ -31,11 +61,16 @@ const CardSetCard: React.FC<CardSetCardProps> = ({ cardSet }) => (
 const CardSetsDrawer: React.FC<CardSetsDrawerProps> = ({
   isOpen,
   onClose,
-  onManage,
+  onCreateCardSet,
+  onEditCardSet,
+  onDeleteCardSet,
   cardSets,
   isLoading,
+  canCreate,
 }) => {
   const { user } = useUser();
+  const [deleteTarget, setDeleteTarget] = useState<CardSet | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Close on ESC key
   useEffect(() => {
@@ -61,9 +96,28 @@ const CardSetsDrawer: React.FC<CardSetsDrawerProps> = ({
     };
   }, [isOpen]);
 
-  const handleManageClick = () => {
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+
+    setIsDeleting(true);
+    try {
+      const success = await onDeleteCardSet(deleteTarget.id);
+      if (success) {
+        setDeleteTarget(null);
+      }
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEditClick = (cardSet: CardSet) => {
     onClose();
-    onManage();
+    onEditCardSet(cardSet);
+  };
+
+  const handleCreateClick = () => {
+    onClose();
+    onCreateCardSet();
   };
 
   return (
@@ -137,7 +191,12 @@ const CardSetsDrawer: React.FC<CardSetsDrawerProps> = ({
           ) : (
             <>
               {cardSets.map((cardSet) => (
-                <CardSetCard key={cardSet.id} cardSet={cardSet} />
+                <CardSetCard
+                  key={cardSet.id}
+                  cardSet={cardSet}
+                  onEdit={() => handleEditClick(cardSet)}
+                  onDelete={() => setDeleteTarget(cardSet)}
+                />
               ))}
             </>
           )}
@@ -148,24 +207,30 @@ const CardSetsDrawer: React.FC<CardSetsDrawerProps> = ({
           <div className="text-center text-sm text-gray-500 mb-3">
             {cardSets.length}/10 slots used
           </div>
-          <button
-            onClick={handleManageClick}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
-          >
-            {cardSets.length === 0 ? (
-              <>
-                <Plus size={18} />
-                Create Card Set
-              </>
-            ) : (
-              <>
-                Manage Card Sets
-                <ChevronRight size={18} />
-              </>
-            )}
-          </button>
+          {canCreate && (
+            <button
+              onClick={handleCreateClick}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors"
+            >
+              <Plus size={18} />
+              Create Card Set
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={!!deleteTarget}
+        title="Delete Card Set"
+        message={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleDeleteConfirm}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 };

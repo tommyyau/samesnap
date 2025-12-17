@@ -1,12 +1,12 @@
 # QA Follow-up Audit
 
-**Role:** Senior systems architect + ruthless QA lead. You already have baseline context recorded in `skills/qa-audit.md`. Re-read that file first to refresh the contract, then re-scan the code for new or unresolved defects.
+**Role:** Senior systems architect + ruthless QA lead. You already have baseline context recorded in `qa/qa-audit.md`. Re-read that file first to refresh the contract, then re-scan the code for new or unresolved defects.
 
 ## Pre-flight Check
 
 First, verify initialization:
 ```bash
-if [ ! -f skills/.qa-init-complete ]; then
+if [ ! -f qa/.qa-init-complete ]; then
   echo "ERROR: Run /qa-init first to establish baseline"
   exit 1
 fi
@@ -17,8 +17,8 @@ If baseline doesn't exist, inform the user to run `/qa-init` first.
 ## Procedure
 
 ### 1. Load baseline
-- Open and read `skills/qa-audit.md` to refresh the contract and known architecture
-- Read `skills/qa-findings.log` to see prior findings and their status
+- Open and read `qa/qa-audit.md` to refresh the contract and known architecture
+- Read `qa/qa-findings.log` to see prior findings and their status
 - Check for any new docs/tests added since last run
 
 ### 2. Re-audit critical flows
@@ -34,7 +34,7 @@ Walk through these flows and confirm previous fixes really match the documented 
 Look for regressions or new gaps introduced by recent changes.
 
 ### 3. Update the QA log
-Append to `skills/qa-findings.log` with:
+Append to `qa/qa-findings.log` with:
 - Today's date and commit hash (if available)
 - List of findings in standard format
 - Status for each: **NEW**, **STILL OPEN**, or **RESOLVED**
@@ -51,7 +51,7 @@ Status: NEW | STILL OPEN | RESOLVED (with commit/date)
 ```
 
 ### Log Update
-Confirm that `skills/qa-findings.log` was appended with the new entry.
+Confirm that `qa/qa-findings.log` was appended with the new entry.
 
 ### Next Checks
 List anything you couldn't verify due to missing tests or requiring manual steps.

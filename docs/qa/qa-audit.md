@@ -208,13 +208,15 @@
 
 | Suite | File | Tests | Focus |
 |-------|------|-------|-------|
-| Logic | test-game-logic.mjs | 17 | Deck gen, Dobble property |
-| Multiplayer | test-multiplayer.mjs | 18 | Room mgmt, game flow |
-| Hook State | test-hook-state.mjs | 25 | Message handling |
-| Stress | test-multiplayer-stress.mjs | 24 | Rapid fire, reconnect |
-| Comprehensive | test-multiplayer-comprehensive.mjs | ~28 | Full flows |
-| React Integration | test-react-integration.mjs | ? | React/WebSocket |
-| **Total** | | **~112** | |
+| Logic | tests/test-game-logic.mjs | 21 | Deck gen, Dobble property |
+| Hook State | tests/test-hook-state.mjs | 33 | Message handling |
+| Single Player | tests/test-single-player-updates.mjs | 26 | Bot AI, game flow |
+| Multiplayer | tests/test-multiplayer.mjs | 14 | Room mgmt |
+| Comprehensive | tests/test-multiplayer-comprehensive.mjs | 41 | Full flows, arbitration |
+| Stats Logic | tests/test-stats-logic.mjs | 22 | User stats business logic |
+| Card Sets Logic | tests/test-cardsets-logic.mjs | 38 | Card set validation |
+| Profile E2E | tests/test-profile-e2e.mjs | 17 | Fire-and-forget, concurrency |
+| **Total** | | **212** | |
 
 ### Test Gaps Identified
 1. **No test for nextRound timer firing after game ends** - Could verify phase guard
@@ -226,11 +228,12 @@
 
 ### Verification Commands
 ```bash
-npm run test:logic        # 17 tests
-npm run test:multiplayer  # 18 tests
-npm run test:hook         # 25 tests
-npm run test:stress       # 24 tests
-npm run test:all          # All suites
+npm run test:quick        # 212 tests (~5 min) - Most common
+npm run test:all          # All suites including stress
+npm run test:logic        # 21 tests
+npm run test:singleplayer # 26 tests
+npm run test:multiplayer  # Multiplayer + comprehensive
+node scripts/run-tests.mjs profile  # 77 tests (stats, cardsets, E2E)
 ```
 
 ---
@@ -336,12 +339,11 @@ Count these if NOT tested:
 
 ---
 
-## Latest Audit Status (Audit #19)
+## Latest Audit Status (Audit #20)
 
-- **Date:** 2025-12-15
-- **Commit:** cce5abe (Test stability + QA audit update + PNG symbol system docs)
-- **Confidence:** 92% (Production-ready)
-- **Tests:** 135/135 passing (100%)
+- **Date:** 2025-12-17
+- **Confidence:** 94% (Production-ready)
+- **Tests:** 212/212 passing (100%)
 
 ### Test Suite Breakdown
 | Suite | Tests | Status |
@@ -350,6 +352,14 @@ Count these if NOT tested:
 | Hook State | 33 | ✅ All pass |
 | Single Player | 26 | ✅ All pass |
 | Multiplayer | 55 | ✅ All pass |
+| Stats Logic | 22 | ✅ All pass |
+| Card Sets Logic | 38 | ✅ All pass |
+| Profile E2E | 17 | ✅ All pass |
+
+### New Tests Added (Audit #20)
+- **Stats Logic (22 tests)**: Streak tracking, mode separation, fastest win tracking, edge cases
+- **Card Sets Logic (38 tests)**: 57-symbol validation, uniqueness, emoji edge cases (ZWJ, skin tones, flags), storage limits
+- **Profile E2E (17 tests)**: Fire-and-forget patterns, concurrent operation serialization, auth state transitions, network latency simulation
 
 ### Issues Fixed This Session
 1. ✅ **PlayerStatus string literal** - WaitingRoom.tsx now uses `PlayerStatus.CONNECTED` enum

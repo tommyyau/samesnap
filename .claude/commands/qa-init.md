@@ -34,8 +34,8 @@ Bullets describing missing coverage or investigations.
 ## Finalization
 
 After completing the audit:
-1. Save the resulting tailored instructions to `skills/qa-audit.md`
-2. Create `skills/.qa-init-complete` marker file with timestamp
-3. Initialize `skills/qa-findings.log` with the first entry
+1. Save the resulting tailored instructions to `qa/qa-audit.md`
+2. Create `qa/.qa-init-complete` marker file with timestamp
+3. Initialize `qa/qa-findings.log` with the first entry
 
 This establishes the baseline for all future `/qa` runs.

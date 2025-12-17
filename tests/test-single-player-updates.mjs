@@ -28,11 +28,13 @@ function test(name, fn) {
 
 // ============================================
 // TEST SUITE: Type Definitions
+// Note: Types are now modular in shared/types/ directory
 // ============================================
 console.log('\n📝 TYPE DEFINITIONS TESTS\n');
 
 test('GameConfig includes gameDuration field', () => {
-  const typesFile = readFileSync('./shared/types.ts', 'utf-8');
+  // GameConfig is in shared/types/singleplayer.ts
+  const typesFile = readFileSync('./shared/types/singleplayer.ts', 'utf-8');
 
   // Find the GameConfig interface
   const gameConfigMatch = typesFile.match(/export interface GameConfig \{[\s\S]*?\}/);
@@ -44,7 +46,8 @@ test('GameConfig includes gameDuration field', () => {
 });
 
 test('GameDuration enum has SHORT, MEDIUM, LONG values', () => {
-  const typesFile = readFileSync('./shared/types.ts', 'utf-8');
+  // GameDuration is in shared/types/core.ts
+  const typesFile = readFileSync('./shared/types/core.ts', 'utf-8');
 
   // Find the GameDuration enum
   const gameDurationMatch = typesFile.match(/export enum GameDuration \{[\s\S]*?\}/);
@@ -60,7 +63,8 @@ test('GameDuration enum has SHORT, MEDIUM, LONG values', () => {
 });
 
 test('GameState enum includes VICTORY_CELEBRATION', () => {
-  const typesFile = readFileSync('./shared/types.ts', 'utf-8');
+  // GameState is in shared/types/singleplayer.ts
+  const typesFile = readFileSync('./shared/types/singleplayer.ts', 'utf-8');
 
   // Find the GameState enum
   const gameStateMatch = typesFile.match(/export enum GameState \{[\s\S]*?\}/);
@@ -100,12 +104,14 @@ test('playVictorySound has fanfare implementation', () => {
 
 // ============================================
 // TEST SUITE: SinglePlayerGame Component
+// Note: Victory celebration is now in VictoryCelebration.tsx
+// Note: Audio is now managed via useGameAudio hook
 // ============================================
 console.log('\n🎮 SINGLE PLAYER GAME TESTS\n');
 
-test('SinglePlayerGame imports playVictorySound', () => {
+test('SinglePlayerGame uses useGameAudio hook for victory sound', () => {
   const gameFile = readFileSync('./components/game/SinglePlayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('playVictorySound'), 'Should import playVictorySound');
+  assert(gameFile.includes('useGameAudio'), 'Should use useGameAudio hook');
 });
 
 test('SinglePlayerGame imports GameDuration', () => {
@@ -133,11 +139,9 @@ test('SinglePlayerGame has original round animation (no overlay)', () => {
   assert(gameFile.includes('highlightSymbolId={matchedSymbolId}'), 'Should highlight matched symbol on center card');
 });
 
-test('SinglePlayerGame has victory celebration with confetti', () => {
+test('SinglePlayerGame uses VictoryCelebration component', () => {
   const gameFile = readFileSync('./components/game/SinglePlayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('confettiEmojis'), 'Should have confetti emojis');
-  assert(gameFile.includes('YOU WIN!'), 'Should show YOU WIN! for victory');
-  assert(gameFile.includes('WINS!'), 'Should show {name} WINS! for bot victory');
+  assert(gameFile.includes('VictoryCelebration'), 'Should use VictoryCelebration component');
 });
 
 // ============================================
@@ -175,12 +179,14 @@ test('SinglePlayerLobby has game duration selector buttons', () => {
 
 // ============================================
 // TEST SUITE: MultiplayerGame Component
+// Note: Victory celebration is now in VictoryCelebration.tsx
+// Note: Audio is now managed via useGameAudio hook
 // ============================================
 console.log('\n🌐 MULTIPLAYER GAME TESTS\n');
 
-test('MultiplayerGame imports playVictorySound', () => {
+test('MultiplayerGame uses useGameAudio hook for victory sound', () => {
   const gameFile = readFileSync('./components/game/MultiplayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('playVictorySound'), 'Should import playVictorySound');
+  assert(gameFile.includes('useGameAudio'), 'Should use useGameAudio hook');
 });
 
 test('MultiplayerGame has victory celebration state', () => {
@@ -189,11 +195,9 @@ test('MultiplayerGame has victory celebration state', () => {
   assert(gameFile.includes('victoryCelebrationShown'), 'Should have victoryCelebrationShown state');
 });
 
-test('MultiplayerGame has victory celebration with confetti', () => {
+test('MultiplayerGame uses VictoryCelebration component', () => {
   const gameFile = readFileSync('./components/game/MultiplayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('confettiEmojis'), 'Should have confetti emojis');
-  assert(gameFile.includes('YOU WIN!'), 'Should show YOU WIN! for victory');
-  assert(gameFile.includes('WINS!'), 'Should show {name} WINS!');
+  assert(gameFile.includes('VictoryCelebration'), 'Should use VictoryCelebration component');
 });
 
 test('MultiplayerGame removed -1 Card text from round celebration', () => {
@@ -289,19 +293,22 @@ test('Card distribution: MEDIUM with 4 players = 6 cards each', () => {
 
 // ============================================
 // TEST SUITE: Float Animation CSS
+// Note: Animation is now in VictoryCelebration.tsx component
 // ============================================
 console.log('\n🎨 ANIMATION TESTS\n');
 
-test('SinglePlayerGame has floatUp animation', () => {
-  const gameFile = readFileSync('./components/game/SinglePlayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('@keyframes floatUp'), 'Should have floatUp keyframe');
-  assert(gameFile.includes('translateY'), 'Should have translateY transform');
-  assert(gameFile.includes('rotate'), 'Should have rotate transform');
+test('VictoryCelebration has floatUp animation', () => {
+  const componentFile = readFileSync('./components/common/VictoryCelebration.tsx', 'utf-8');
+  assert(componentFile.includes('@keyframes floatUp'), 'Should have floatUp keyframe');
+  assert(componentFile.includes('translateY'), 'Should have translateY transform');
+  assert(componentFile.includes('rotate'), 'Should have rotate transform');
 });
 
-test('MultiplayerGame has floatUp animation', () => {
-  const gameFile = readFileSync('./components/game/MultiplayerGame.tsx', 'utf-8');
-  assert(gameFile.includes('@keyframes floatUp'), 'Should have floatUp keyframe');
+test('VictoryCelebration has confetti emojis', () => {
+  const componentFile = readFileSync('./components/common/VictoryCelebration.tsx', 'utf-8');
+  assert(componentFile.includes('CONFETTI_EMOJIS') || componentFile.includes('confettiEmojis'), 'Should have confetti emojis');
+  assert(componentFile.includes('YOU WIN!'), 'Should show YOU WIN! for victory');
+  assert(componentFile.includes('WINS!'), 'Should show {name} WINS! for other winner');
 });
 
 // ============================================

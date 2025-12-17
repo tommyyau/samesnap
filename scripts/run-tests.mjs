@@ -2,7 +2,7 @@
 /**
  * Test Runner with Logging
  *
- * Wraps test execution and logs results with timing to skills/test-runs.log
+ * Wraps test execution and logs results with timing to logs/test-runs.log
  *
  * Usage:
  *   node scripts/run-tests.mjs [suite]
@@ -23,7 +23,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = join(__dirname, '..');
-const LOG_DIR = join(PROJECT_ROOT, 'skills');
+const LOG_DIR = join(PROJECT_ROOT, 'logs');
 const LATEST_LOG_LINK = join(LOG_DIR, 'test-runs-latest.log');
 
 // Generate timestamped log filename
@@ -43,56 +43,74 @@ const SUITES = {
   logic: {
     name: 'Game Logic',
     command: 'node',
-    args: ['test-game-logic.mjs'],
+    args: ['tests/test-game-logic.mjs'],
     expectedDuration: '~5s'
   },
   singleplayer: {
     name: 'Single Player Updates',
     command: 'node',
-    args: ['test-single-player-updates.mjs'],
+    args: ['tests/test-single-player-updates.mjs'],
     expectedDuration: '~5s'
   },
   multiplayer: {
     name: 'Multiplayer',
     command: 'node',
-    args: ['test-multiplayer.mjs'],
+    args: ['tests/test-multiplayer.mjs'],
     expectedDuration: '~30s'
   },
   hook: {
     name: 'Hook State',
     command: 'node',
-    args: ['test-hook-state.mjs'],
+    args: ['tests/test-hook-state.mjs'],
     expectedDuration: '~5s'
   },
   stress: {
     name: 'Stress',
     command: 'node',
-    args: ['test-multiplayer-stress.mjs'],
+    args: ['tests/test-multiplayer-stress.mjs'],
     expectedDuration: '~2-3 min'
   },
   gameflow: {
     name: 'Comprehensive - Gameflow',
     command: 'node',
-    args: ['test-multiplayer-comprehensive.mjs', 'gameflow'],
+    args: ['tests/test-multiplayer-comprehensive.mjs', 'gameflow'],
     expectedDuration: '~4 min'
   },
   arbitration: {
     name: 'Comprehensive - Arbitration',
     command: 'node',
-    args: ['test-multiplayer-comprehensive.mjs', 'arbitration'],
+    args: ['tests/test-multiplayer-comprehensive.mjs', 'arbitration'],
     expectedDuration: '~1 min'
   },
   lifecycle: {
     name: 'Comprehensive - Lifecycle',
     command: 'node',
-    args: ['test-multiplayer-comprehensive.mjs', 'lifecycle'],
+    args: ['tests/test-multiplayer-comprehensive.mjs', 'lifecycle'],
     expectedDuration: '~3 min'
   },
   scores: {
     name: 'Comprehensive - Scores',
     command: 'node',
-    args: ['test-multiplayer-comprehensive.mjs', 'scores'],
+    args: ['tests/test-multiplayer-comprehensive.mjs', 'scores'],
     expectedDuration: '~2 min'
+  },
+  statslogic: {
+    name: 'Stats Logic',
+    command: 'node',
+    args: ['tests/test-stats-logic.mjs'],
+    expectedDuration: '~5s'
+  },
+  cardsetslogic: {
+    name: 'Card Sets Logic',
+    command: 'node',
+    args: ['tests/test-cardsets-logic.mjs'],
+    expectedDuration: '~5s'
+  },
+  profilee2e: {
+    name: 'Profile E2E',
+    command: 'node',
+    args: ['tests/test-profile-e2e.mjs'],
+    expectedDuration: '~10s'
   }
 };
 
@@ -100,13 +118,16 @@ const SUITES = {
 const GROUPS = {
   // Stage-based plans. Each nested array runs in parallel; stages run sequentially.
   all: [
-    ['logic', 'hook', 'singleplayer'],
-    ['multiplayer', 'stress'],
+    ['logic', 'hook', 'singleplayer', 'statslogic', 'cardsetslogic'],
+    ['multiplayer', 'stress', 'profilee2e'],
     ['gameflow', 'arbitration', 'lifecycle', 'scores']
   ],
   quick: [
-    ['logic', 'hook', 'singleplayer'],
-    ['multiplayer']
+    ['logic', 'hook', 'singleplayer', 'statslogic', 'cardsetslogic'],
+    ['multiplayer', 'profilee2e']
+  ],
+  profile: [
+    ['statslogic', 'cardsetslogic', 'profilee2e']
   ]
 };
 
@@ -314,8 +335,8 @@ function logResults(results, totalDuration) {
   }
 
   const logBasename = LOG_FILE.split('/').pop();
-  console.log(`\n📝 Results logged to: skills/${logBasename}`);
-  console.log(`   Latest link: skills/test-runs-latest.log`);
+  console.log(`\n📝 Results logged to: logs/${logBasename}`);
+  console.log(`   Latest link: logs/test-runs-latest.log`);
 
   return { totalPassed, totalFailed, totalTests };
 }
@@ -350,7 +371,7 @@ async function main() {
     .map(stage => stage.map(s => SUITES[s].expectedDuration).join(' + '))
     .join(' -> ');
   console.log(`   Expected per stage: ${expectedTimes}`);
-  console.log(`   Log file: skills/${logBasename}\n`);
+  console.log(`   Log file: logs/${logBasename}\n`);
 
   const overallStart = Date.now();
   const results = [];
