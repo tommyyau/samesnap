@@ -28,10 +28,16 @@ async function getUserId(req: VercelRequest): Promise<string | null> {
     ];
 
     // Add the request origin if it's a Vercel preview deployment
-    const origin = req.headers.origin || req.headers.referer;
+    let origin = req.headers.origin;
+    if (!origin && req.headers.referer) {
+      try {
+        origin = new URL(String(req.headers.referer)).origin;
+      } catch {
+        // Invalid URL, ignore
+      }
+    }
     if (origin && origin.includes('.vercel.app') && !authorizedParties.includes(origin)) {
-      const cleanOrigin = String(origin).replace(/\/$/, '');
-      authorizedParties.push(cleanOrigin);
+      authorizedParties.push(origin);
     }
 
     const payload = await verifyToken(token, {
