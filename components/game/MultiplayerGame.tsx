@@ -76,10 +76,14 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
 
   // Record game stats when game ends
   useEffect(() => {
+    // Debug: Log state for multiplayer stats
+    console.log('[MP Stats] Phase:', roomState?.phase, 'statsRecorded:', statsRecordedRef.current, 'gameStartTime:', gameStartTimeRef.current);
+
     if (roomState?.phase === RoomPhase.GAME_OVER && !statsRecordedRef.current && gameStartTimeRef.current !== null) {
       statsRecordedRef.current = true;
 
       const you = roomState.players.find(p => p.isYou);
+      console.log('[MP Stats] Found you:', you, 'players:', roomState.players);
       if (!you) return;
 
       // You win if you have 0 cards OR you're the last player standing
@@ -104,13 +108,17 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       };
 
       // Record game and show appropriate toast
+      console.log('[MP Stats] Recording payload:', payload);
       recordGameResult(payload).then(result => {
+        console.log('[MP Stats] Record result:', result);
         if (result.isPersonalBest) {
           setToast({ message: 'New Record!', icon: '🔥' });
         } else if (!result.recorded && !hasShownSignInPrompt()) {
           markSignInPromptShown();
           setToast({ message: 'Sign in to save your progress' });
         }
+      }).catch(err => {
+        console.error('[MP Stats] Record error:', err);
       });
     }
   }, [roomState?.phase, roomState?.players, roomState?.gameEndReason, roomState?.config, recordGameResult]);
