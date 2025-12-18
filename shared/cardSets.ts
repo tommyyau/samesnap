@@ -106,6 +106,76 @@ export const CARD_SET_MARVEL: CardSet = {
   isBuiltIn: true,
 };
 
+// Great Outdoors Set: 57 outdoor gear and adventure PNGs
+const GREAT_OUTDOORS_IMAGES = [
+  '016281_cha_furry_flying_hat_acc_ss23_01__45355.png',
+  '016884_kha_mtlc_pln_water_bottle_w_kb_1l_har_ss25_01.png',
+  '018519_yel_rash_vest_men_ss24_01.png',
+  '018903_yel_force_jacket_men_aw23_02.png',
+  '021498_cob_aruba_swim_short_men_ss25_02.png',
+  '022025_gre_field_extreme_vibram_waterproof_walking_shoe_ftw_ss24_double_01.png',
+  '022323_bla_combination_padlock_har_aw23_01.png',
+  '022533_pin_festival_2person_ss25_01.png',
+  '023097_cob_raptor_kids_snow_jacket_kid_ss24_02__47250.png',
+  '023147_bei_ohio_womens_thermal_fleece_lined_snow_boot_ftw_aw24_01.png',
+  '023156_dpu_basecamp_250_sleeping_bag_aw24_01.png',
+  '023345_dte_nevis_womens_fur_lined_fleece_jacket_wms_aw24_02__52319.png',
+  '023485_lil_raso_womens_fleece_wms_ss23_02.png',
+  '023578_nav_isocool_mid_calf_hiker_sock_acc_ss23_01.png',
+  '023933_one_compass_har_aw23_01.png',
+  '023965_pur_orchid_print_ss_womens_dress_wms_ss25_02.png',
+  '024187_mir_tortolla_sunglasses_acc_ss24_01__56221.png',
+  '025105_tea_endurance_stripe_womens_ss_tee_wms_ss25_01.png',
+  '025440_kha_alaskan_womens_3_in_1_long_waterproof_jacket_wms_aw23_01.png',
+  '025480_ofw_willow_brushed_flannel_slim_fit_ls_womens_shirt_wms_ss25_01.png',
+  '025569_lgr_thinsulate_fairisle_womens_glove_acc_aw22_01.png',
+  '025771_nav_printed_wms_great_british_weather_t_shirt_wms_ss25_01.png',
+  '028715_lil_borg_lined_kids_knitted_character_trapper_acc_aw22_01__07992.png',
+  '029309_iri_florence_kids_long_padded_jacket_kid_aw24_04.png',
+  '030227_bty_9_led_rubber_mini_torch_har_ss25_01.png',
+  '031472_whi_snowflake_wms_extreme_waterproof_thermal_snow_boot_ftw_aw23_06.png',
+  '034729_dgn_pace_20l_har_aw24_01.png',
+  '035129_red_santorini_printed_wrap_wms_uv_protective_dress_wms_ss25_01__83653.png',
+  '035312_kha_explorer_womens_capri_wms_ss24_01.png',
+  '036241_red_pocket_first_aid_kit_har_aw24_01.png',
+  '037179_mxd_fluff_bomb_kids_fleece_lined_beanie_acc_ss24_04__94973.png',
+  '037388_mxd_large_rainbow_umbrella_har_ss25_01.png',
+  '041738_kha_ankle_womens_rubber_wellie_ftw_aw24_01__52067.png',
+  '042482_jbl_blackout_plain_womens_sports_bra_wms_aw23_01__20817.png',
+  '044284_pur_xootz_skateboard_22_inch_ss21_1.png',
+  '049646_blu_animal_brett_mens_stripe_boardshorts_anl_ss25_06__85269.png',
+  '052972_bpi_mwh_extreme_waterproof_kids_ski_glove_acc_aw25_01__82270.png',
+  '053030_bla_adventurer_womens_waterproof_walking_boot_ftw_aw24_01.png',
+  '053035_lgr_lakeside_womens_trail_waterproof_running_shoe_ftw_ss24_01__43337.png',
+  '053043_blu_dusk_ii_ski_pant_men_aw24_01__14660.png',
+  '053085_lpu_cloud_printed_kids_waterproof_all_in_one_snowsuit_kid_aw24_02.png',
+  '053319_pur_traveller_60l_20l_har_aw24_02.png',
+  '055257_bor_cosy_blanket_scarf_acc_aw24_01__31868.png',
+  '055623_bro_sydney_womens_tortoise_sunglasses_acc_ss24_01__34181.png',
+  '056132_mxd_4_person_cutlery_set_har_ss24_02__85548.png',
+  '056183_yel_ava_kids_tiered_dress_kid_ss25_01.png',
+  '056237_kha_alaskan_exterme_3_in_1_waterproof_jacket_men_aw24_01.png',
+  '056277_bro_stowe_waterproof_thermal_snow_boot_ftw_aw24_01__35433.png',
+  '056905_nav_animal_push_lid_water_bottle_700ml_animal_ss25_01.png',
+  '057796_nav_bookworm_backpack_15l_har_ss25_02__01958.png',
+  '058209_bpi_mwh_aspen_women_waterproof_ski_jacket_tec_aw25_09.png',
+  '058264_grn_mwh_rechargeable_cob_lantern_har_aw25_01__04320.png',
+  '058488_nav_animal_regional_baseball_cap_cromer_anl_ss25_01__66806.png',
+  '059090_whi_mwh_womens_padded_ski_jacket_and_pant_set_tec_aw25_07.png',
+  '060875_kha_cosy_wrap_ii_womens_extreme_down_jacket_wms_aw24_01__82399.png',
+  '318636_source_1756886987.png',
+  'gftmw1_red_gift_cards_ss18_4.png',
+];
+export const SYMBOLS_GREAT_OUTDOORS = createPngSymbols('great-outdoors', GREAT_OUTDOORS_IMAGES);
+
+export const CARD_SET_GREAT_OUTDOORS: CardSet = {
+  id: 'great-outdoors',
+  name: 'Great Outdoors',
+  description: 'Outdoor gear and adventure equipment',
+  symbols: SYMBOLS_GREAT_OUTDOORS,
+  isBuiltIn: true,
+};
+
 // Built-in card sets (non-editable)
 export const BUILT_IN_CARD_SETS: CardSet[] = [
   {
@@ -131,6 +201,7 @@ export const BUILT_IN_CARD_SETS: CardSet[] = [
   },
   CARD_SET_NUMBERS,
   CARD_SET_MARVEL,
+  CARD_SET_GREAT_OUTDOORS,
 ];
 
 // Default card set ID
