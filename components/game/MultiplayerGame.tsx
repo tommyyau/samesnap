@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardLayout, RecordGamePayload } from '../../shared/types';
-import { getCardSetById } from '../../shared/cardSets';
+import { getCardSetById, getSymbolsForCardSet } from '../../shared/cardSets';
 import Card from '../Card';
-import { XCircle, Zap, Wifi } from 'lucide-react';
+import { XCircle, Zap, Wifi, Loader2 } from 'lucide-react';
 import { ConnectionErrorModal } from '../common/ConnectionErrorModal';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { useUserStats, hasShownSignInPrompt, markSignInPromptShown } from '../../hooks/useUserStats';
 import { Toast } from '../common/Toast';
 import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
 import { useGameAudio } from '../../hooks/useGameAudio';
+import { useImagePreloader } from '../../hooks/useImagePreloader';
 import { VictoryCelebration } from '../common/VictoryCelebration';
 import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
 
@@ -48,6 +49,23 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     isGameOver: isGameOverPhase || false,
   });
 
+  // Compute symbols from room config for preloading (once config is available)
+  const symbols = useMemo((): SymbolItem[] => {
+    const config = roomState?.config;
+    if (!config) return [];
+    if (config.customSymbols && config.customSymbols.length === 57) {
+      return config.customSymbols.map((char, index) => ({
+        id: index,
+        char,
+        name: `Symbol ${index}`,
+      }));
+    }
+    return getSymbolsForCardSet(config.cardSetId || 'children');
+  }, [roomState?.config]);
+
+  // Preload PNG images (returns immediately for emoji sets)
+  const { loaded: imagesLoaded, progress: loadProgress } = useImagePreloader(symbols);
+
   // Track game start time when game starts
   // Note: Background music is auto-managed by useGameAudio hook
   useEffect(() => {
@@ -58,10 +76,14 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
 
   // Record game stats when game ends
   useEffect(() => {
+    // Debug: Log state for multiplayer stats
+    console.log('[MP Stats] Phase:', roomState?.phase, 'statsRecorded:', statsRecordedRef.current, 'gameStartTime:', gameStartTimeRef.current);
+
     if (roomState?.phase === RoomPhase.GAME_OVER && !statsRecordedRef.current && gameStartTimeRef.current !== null) {
       statsRecordedRef.current = true;
 
       const you = roomState.players.find(p => p.isYou);
+      console.log('[MP Stats] Found you:', you, 'players:', roomState.players);
       if (!you) return;
 
       // You win if you have 0 cards OR you're the last player standing
@@ -86,13 +108,17 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       };
 
       // Record game and show appropriate toast
+      console.log('[MP Stats] Recording payload:', payload);
       recordGameResult(payload).then(result => {
+        console.log('[MP Stats] Record result:', result);
         if (result.isPersonalBest) {
           setToast({ message: 'New Record!', icon: '🔥' });
         } else if (!result.recorded && !hasShownSignInPrompt()) {
           markSignInPromptShown();
           setToast({ message: 'Sign in to save your progress' });
         }
+      }).catch(err => {
+        console.error('[MP Stats] Record error:', err);
       });
     }
   }, [roomState?.phase, roomState?.players, roomState?.gameEndReason, roomState?.config, recordGameResult]);
@@ -135,9 +161,9 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }
   }, [roomState?.rejoinWindowEndsAt]);
 
-  // Reset state when we leave GAME_OVER phase (room was reset)
+  // Reset state when room resets to WAITING phase (new game starting)
   useEffect(() => {
-    if (roomState?.phase !== RoomPhase.GAME_OVER) {
+    if (roomState?.phase === RoomPhase.WAITING) {
       setHasClickedPlayAgain(false);
       setVictoryCelebrationShown(false);
       setShowVictoryCelebration(false);
@@ -207,6 +233,23 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white">
         <div className="text-9xl font-black animate-pulse">{roomState.countdown}</div>
         <div className="text-2xl mt-4">Get Ready!</div>
+      </div>
+    );
+  }
+
+  // Loading screen for PNG card sets (show during playing phase if images not ready)
+  if (roomState.phase === RoomPhase.PLAYING && !imagesLoaded) {
+    return (
+      <div className="flex flex-col h-screen bg-slate-100 items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+        <div className="text-lg font-semibold text-slate-700">Loading card set...</div>
+        <div className="w-48 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-indigo-500 transition-all duration-200"
+            style={{ width: `${loadProgress}%` }}
+          />
+        </div>
+        <div className="text-sm text-slate-500">{loadProgress}%</div>
       </div>
     );
   }

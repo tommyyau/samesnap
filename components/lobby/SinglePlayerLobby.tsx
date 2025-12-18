@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Difficulty, GameConfig, CardLayout, GameDuration, CardSet } from '../../shared/types';
-import { getBuiltInCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Difficulty, GameConfig, CardLayout, GameDuration, CardSet, SymbolItem } from '../../shared/types';
+import { getBuiltInCardSets, getSymbolsForCardSet, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useUser } from '@clerk/clerk-react';
+import { useImagePreloader } from '../../hooks/useImagePreloader';
 
 interface SinglePlayerLobbyProps {
   onStart: (config: GameConfig) => void;
@@ -37,6 +38,19 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
   const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
+
+  // Preload PNG images for selected card set (runs in background during lobby)
+  const preloadSymbols = useMemo((): SymbolItem[] => {
+    const selectedSet = allCardSets.find(s => s.id === cardSetId);
+    if (selectedSet && !selectedSet.isBuiltIn) {
+      // Custom set - emoji-only, no preload needed
+      return [];
+    }
+    return getSymbolsForCardSet(cardSetId);
+  }, [cardSetId, allCardSets]);
+
+  // Start preloading as soon as card set is selected
+  useImagePreloader(preloadSymbols);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -207,8 +221,19 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
                       }`}
                     >
                       <div>{cardSet.name}</div>
-                      <div className="text-lg mt-1">
-                        {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
+                      <div className="text-lg mt-1 flex justify-center gap-0.5">
+                        {cardSet.symbols.slice(0, 3).map((s, i) =>
+                          s.imageUrl ? (
+                            <img
+                              key={i}
+                              src={s.imageUrl}
+                              alt=""
+                              className="w-5 h-5 object-contain"
+                            />
+                          ) : (
+                            <span key={i}>{s.char}</span>
+                          )
+                        )}
                       </div>
                     </button>
                   ))}

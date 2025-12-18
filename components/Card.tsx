@@ -202,10 +202,24 @@ const Card: React.FC<CardProps> = ({
                 width: `${25 * item.scale}%`,
                 height: `${25 * item.scale}%`,
                 transform: `translate(-50%, -50%) rotate(${item.rotation}deg) scale(${isMatch ? 1.5 : 1})`,
-                fontSize: `${size * 0.15 * item.scale}px`,
+                fontSize: item.symbol.imageUrl ? undefined : `${size * 0.15 * item.scale}px`,
               }}
             >
-              {item.symbol.char}
+              {item.symbol.imageUrl ? (
+                <img
+                  src={item.symbol.imageUrl}
+                  alt={item.symbol.name}
+                  draggable={false}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    pointerEvents: 'none',
+                  }}
+                />
+              ) : (
+                item.symbol.char
+              )}
             </div>
           );
         })}
