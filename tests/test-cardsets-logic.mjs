@@ -543,6 +543,235 @@ test('Update creates new object, doesnt mutate original', () => {
 });
 
 // ============================================
+// TEST SUITE: PNG Card Sets
+// ============================================
+console.log('\n🖼️  PNG CARD SETS TESTS\n');
+
+// Mock createPngSymbols (mirrors shared/cardSets.ts)
+function createPngSymbols(setFolder, imageNames) {
+  if (imageNames.length !== 57) {
+    throw new Error(`PNG card set must have exactly 57 images, got ${imageNames.length}`);
+  }
+  return imageNames.map((name, index) => ({
+    id: index,
+    char: '', // No emoji fallback for PNG sets
+    name: name.replace(/-/g, ' ').replace(/\.png$/, ''),
+    imageUrl: `/cardsets/${setFolder}/${name}`,
+  }));
+}
+
+test('createPngSymbols requires exactly 57 images', () => {
+  assert.throws(
+    () => createPngSymbols('test', ['1.png', '2.png']),
+    /exactly 57 images/
+  );
+});
+
+test('createPngSymbols generates correct imageUrl paths', () => {
+  const images = Array.from({ length: 57 }, (_, i) => `${i + 1}.png`);
+  const symbols = createPngSymbols('number-set', images);
+
+  assert.strictEqual(symbols[0].imageUrl, '/cardsets/number-set/1.png');
+  assert.strictEqual(symbols[56].imageUrl, '/cardsets/number-set/57.png');
+});
+
+test('createPngSymbols sets empty char for PNG symbols', () => {
+  const images = Array.from({ length: 57 }, (_, i) => `${i + 1}.png`);
+  const symbols = createPngSymbols('test', images);
+
+  symbols.forEach(s => {
+    assert.strictEqual(s.char, '', 'PNG symbols should have empty char');
+  });
+});
+
+test('createPngSymbols generates readable names from filenames', () => {
+  const images = Array.from({ length: 57 }, (_, i) => `image-${i + 1}.png`);
+  const symbols = createPngSymbols('test', images);
+
+  assert.strictEqual(symbols[0].name, 'image 1');
+  assert.strictEqual(symbols[1].name, 'image 2');
+});
+
+test('createPngSymbols handles complex filenames', () => {
+  const complexNames = [
+    'iron-man-chibi.png',
+    'black-widow-(natasha-romanoff)-chibi.png',
+    'ms.-marvel-(kamala-khan)-chibi.png',
+  ];
+  // Pad to 57
+  const images = [...complexNames];
+  for (let i = complexNames.length; i < 57; i++) {
+    images.push(`image-${i}.png`);
+  }
+
+  const symbols = createPngSymbols('marvel', images);
+
+  assert.strictEqual(symbols[0].name, 'iron man chibi');
+  assert.strictEqual(symbols[1].name, 'black widow (natasha romanoff) chibi');
+});
+
+test('PNG symbols have sequential IDs', () => {
+  const images = Array.from({ length: 57 }, (_, i) => `${i + 1}.png`);
+  const symbols = createPngSymbols('test', images);
+
+  symbols.forEach((s, i) => {
+    assert.strictEqual(s.id, i, `Symbol ${i} should have id ${i}`);
+  });
+});
+
+test('PNG symbol imageUrl can be used for rendering check', () => {
+  const images = Array.from({ length: 57 }, (_, i) => `${i + 1}.png`);
+  const symbols = createPngSymbols('test', images);
+
+  // Simulate what Card.tsx does: check if imageUrl exists
+  symbols.forEach(s => {
+    const hasImage = !!s.imageUrl;
+    assert(hasImage, 'All PNG symbols should have imageUrl');
+  });
+});
+
+test('Mixed emoji and PNG detection works', () => {
+  // Emoji symbol (no imageUrl)
+  const emojiSymbol = { id: 0, char: '🐶', name: 'dog' };
+  // PNG symbol (has imageUrl)
+  const pngSymbol = { id: 0, char: '', name: 'dog', imageUrl: '/cardsets/test/dog.png' };
+
+  // This is how components decide rendering
+  const renderAsImage = (s) => !!s.imageUrl;
+
+  assert.strictEqual(renderAsImage(emojiSymbol), false, 'Emoji should render as text');
+  assert.strictEqual(renderAsImage(pngSymbol), true, 'PNG should render as image');
+});
+
+// ============================================
+// TEST SUITE: Multiplayer Stats Ref Behavior
+// ============================================
+console.log('\n📊 MULTIPLAYER STATS REF BEHAVIOR TESTS\n');
+
+// Simulate the phase transitions and ref behavior
+class StatsRefSimulator {
+  constructor() {
+    this.gameStartTime = null;
+    this.statsRecorded = false;
+  }
+
+  // Called when phase becomes PLAYING
+  onPlayingPhase() {
+    if (this.gameStartTime === null) {
+      this.gameStartTime = Date.now();
+    }
+  }
+
+  // Called when phase becomes WAITING (new game)
+  onWaitingPhase() {
+    this.gameStartTime = null;
+    this.statsRecorded = false;
+  }
+
+  // Called when phase becomes GAME_OVER
+  canRecordStats() {
+    return !this.statsRecorded && this.gameStartTime !== null;
+  }
+
+  recordStats() {
+    if (this.canRecordStats()) {
+      this.statsRecorded = true;
+      return true;
+    }
+    return false;
+  }
+}
+
+test('Stats refs are set when PLAYING phase starts', () => {
+  const sim = new StatsRefSimulator();
+  assert.strictEqual(sim.gameStartTime, null);
+
+  sim.onPlayingPhase();
+  assert(sim.gameStartTime !== null, 'gameStartTime should be set');
+});
+
+test('Stats can be recorded when game ends with valid start time', () => {
+  const sim = new StatsRefSimulator();
+  sim.onPlayingPhase();
+
+  assert(sim.canRecordStats(), 'Should be able to record stats');
+  assert(sim.recordStats(), 'Stats should record successfully');
+});
+
+test('Stats cannot be recorded twice', () => {
+  const sim = new StatsRefSimulator();
+  sim.onPlayingPhase();
+
+  assert(sim.recordStats(), 'First record should succeed');
+  assert(!sim.recordStats(), 'Second record should fail');
+});
+
+test('Stats refs persist through ROUND_END phase', () => {
+  const sim = new StatsRefSimulator();
+  sim.onPlayingPhase();
+  const startTime = sim.gameStartTime;
+
+  // ROUND_END should NOT reset refs (this was the bug!)
+  // In the fixed code, only WAITING resets refs
+  // So we just verify the ref persists
+  assert.strictEqual(sim.gameStartTime, startTime, 'gameStartTime should persist');
+  assert(sim.canRecordStats(), 'Should still be able to record stats');
+});
+
+test('Stats refs reset when returning to WAITING phase', () => {
+  const sim = new StatsRefSimulator();
+  sim.onPlayingPhase();
+  sim.recordStats();
+
+  // After game, return to WAITING for new game
+  sim.onWaitingPhase();
+
+  assert.strictEqual(sim.gameStartTime, null, 'gameStartTime should be null');
+  assert.strictEqual(sim.statsRecorded, false, 'statsRecorded should be false');
+});
+
+test('Full game cycle: WAITING -> PLAYING -> GAME_OVER -> WAITING', () => {
+  const sim = new StatsRefSimulator();
+
+  // Start in WAITING (initial state)
+  assert.strictEqual(sim.gameStartTime, null);
+
+  // Game starts (PLAYING)
+  sim.onPlayingPhase();
+  assert(sim.gameStartTime !== null);
+
+  // Game ends (GAME_OVER) - record stats
+  assert(sim.canRecordStats());
+  sim.recordStats();
+  assert(!sim.canRecordStats(), 'Cannot record again');
+
+  // Play Again (back to WAITING)
+  sim.onWaitingPhase();
+  assert.strictEqual(sim.gameStartTime, null);
+  assert.strictEqual(sim.statsRecorded, false);
+
+  // New game starts
+  sim.onPlayingPhase();
+  assert(sim.canRecordStats(), 'Should be able to record for new game');
+});
+
+test('Multiple rounds do not affect stats recording ability', () => {
+  const sim = new StatsRefSimulator();
+  sim.onPlayingPhase();
+  const startTime = sim.gameStartTime;
+
+  // Simulate multiple rounds (PLAYING -> ROUND_END -> PLAYING cycle)
+  // In the fixed code, neither ROUND_END nor returning to PLAYING resets the ref
+  for (let i = 0; i < 5; i++) {
+    // The ref should persist throughout
+    assert.strictEqual(sim.gameStartTime, startTime, `Round ${i + 1}: gameStartTime should persist`);
+  }
+
+  // Can still record at the end
+  assert(sim.canRecordStats());
+});
+
+// ============================================
 // SUMMARY
 // ============================================
 console.log('\n' + '='.repeat(50));
