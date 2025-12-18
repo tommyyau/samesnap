@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Copy, Check, Wifi, WifiOff, Play, LogOut, Users, Clock } from 'lucide-react';
-import { CardLayout, GameDuration, RoomPhase } from '../../shared/types';
-import { getBuiltInCardSets, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
+import { CardLayout, GameDuration, RoomPhase, SymbolItem } from '../../shared/types';
+import { getBuiltInCardSets, getSymbolsForCardSet, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { useCustomCardSets } from '../../hooks/useCustomCardSets';
 import { useRoomCountdown } from '../../hooks/useRoomCountdown';
+import { useImagePreloader } from '../../hooks/useImagePreloader';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
 import { ConnectionErrorModal } from '../common/ConnectionErrorModal';
@@ -36,6 +37,21 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
   // Helper to get a card set by ID
   const getCardSetById = (id: string) => allCardSets.find((set) => set.id === id);
+
+  // Preload PNG images for selected card set (runs in background during lobby)
+  // This ensures images are cached before game starts
+  const preloadSymbols = useMemo((): SymbolItem[] => {
+    const selectedSet = getCardSetById(cardSetId);
+    if (selectedSet && !selectedSet.isBuiltIn) {
+      // Custom set - use custom symbols (emoji-only, no preload needed)
+      return [];
+    }
+    // Built-in set - get symbols which may include PNG imageUrls
+    return getSymbolsForCardSet(cardSetId);
+  }, [cardSetId, allCardSets]);
+
+  // Start preloading as soon as card set is selected (fire-and-forget)
+  useImagePreloader(preloadSymbols);
 
   // Room timeout countdown (clock-skew safe)
   const timeLeft = useRoomCountdown(roomState?.roomExpiresInMs);
