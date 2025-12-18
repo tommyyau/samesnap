@@ -4,8 +4,9 @@
 
 export interface SymbolItem {
   id: number;
-  char: string;
-  name: string;
+  char: string; // Emoji character (empty string for PNG-only sets)
+  name: string; // Human-readable name (used for alt text)
+  imageUrl?: string; // Optional PNG path (relative to public folder)
 }
 
 export interface CardData {

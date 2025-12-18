@@ -1,15 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { RoomPhase, SymbolItem, CardLayout, RecordGamePayload } from '../../shared/types';
-import { getCardSetById } from '../../shared/cardSets';
+import { getCardSetById, getSymbolsForCardSet } from '../../shared/cardSets';
 import Card from '../Card';
-import { XCircle, Zap, Wifi } from 'lucide-react';
+import { XCircle, Zap, Wifi, Loader2 } from 'lucide-react';
 import { ConnectionErrorModal } from '../common/ConnectionErrorModal';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { useUserStats, hasShownSignInPrompt, markSignInPromptShown } from '../../hooks/useUserStats';
 import { Toast } from '../common/Toast';
 import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
 import { useGameAudio } from '../../hooks/useGameAudio';
+import { useImagePreloader } from '../../hooks/useImagePreloader';
 import { VictoryCelebration } from '../common/VictoryCelebration';
 import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
 
@@ -47,6 +48,23 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     isPlaying: isPlayingPhase || false,
     isGameOver: isGameOverPhase || false,
   });
+
+  // Compute symbols from room config for preloading (once config is available)
+  const symbols = useMemo((): SymbolItem[] => {
+    const config = roomState?.config;
+    if (!config) return [];
+    if (config.customSymbols && config.customSymbols.length === 57) {
+      return config.customSymbols.map((char, index) => ({
+        id: index,
+        char,
+        name: `Symbol ${index}`,
+      }));
+    }
+    return getSymbolsForCardSet(config.cardSetId || 'children');
+  }, [roomState?.config]);
+
+  // Preload PNG images (returns immediately for emoji sets)
+  const { loaded: imagesLoaded, progress: loadProgress } = useImagePreloader(symbols);
 
   // Track game start time when game starts
   // Note: Background music is auto-managed by useGameAudio hook
@@ -207,6 +225,23 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       <div className="flex flex-col items-center justify-center min-h-screen bg-indigo-900 text-white">
         <div className="text-9xl font-black animate-pulse">{roomState.countdown}</div>
         <div className="text-2xl mt-4">Get Ready!</div>
+      </div>
+    );
+  }
+
+  // Loading screen for PNG card sets (show during playing phase if images not ready)
+  if (roomState.phase === RoomPhase.PLAYING && !imagesLoaded) {
+    return (
+      <div className="flex flex-col h-screen bg-slate-100 items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+        <div className="text-lg font-semibold text-slate-700">Loading card set...</div>
+        <div className="w-48 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-indigo-500 transition-all duration-200"
+            style={{ width: `${loadProgress}%` }}
+          />
+        </div>
+        <div className="text-sm text-slate-500">{loadProgress}%</div>
       </div>
     );
   }

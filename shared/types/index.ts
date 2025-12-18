@@ -2,22 +2,24 @@
 // Existing imports like `from '../shared/types'` will continue to work
 
 // Core types
-export {
+export type {
   SymbolItem,
   CardData,
+  CardSet,
+} from './core';
+
+export {
   CardDifficulty,
   CardLayout,
-  CardSet,
   GameDuration,
 } from './core';
 
 // Single-player types
-export { Difficulty, GameState, Player, GameConfig } from './singleplayer';
+export type { Player, GameConfig } from './singleplayer';
+export { Difficulty, GameState } from './singleplayer';
 
 // Multiplayer types
-export {
-  RoomPhase,
-  PlayerStatus,
+export type {
   ServerPlayer,
   ClientPlayer,
   MatchAttempt,
@@ -25,14 +27,22 @@ export {
   ClientRoomState,
 } from './multiplayer';
 
-// Stats types
 export {
+  RoomPhase,
+  PlayerStatus,
+} from './multiplayer';
+
+// Stats types
+export type {
   GameMode,
   WinReason,
   ModeStats,
   UserStats,
   GameContext,
   RecordGamePayload,
+} from './stats';
+
+export {
   DEFAULT_MODE_STATS,
   DEFAULT_USER_STATS,
 } from './stats';

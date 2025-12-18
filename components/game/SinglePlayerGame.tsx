@@ -1,16 +1,17 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { GameConfig, Player, CardData, SymbolItem, GameState, GameDuration, RecordGamePayload } from '../../shared/types';
 import { generateDeck, findMatch, shuffle } from '../../shared/gameLogic';
 import { getSymbolsForCardSet, getCardSetById } from '../../shared/cardSets';
 import { PENALTY_DURATION, BOT_NAMES } from '../../constants';
 import Card from '../Card';
-import { XCircle, Zap } from 'lucide-react';
+import { XCircle, Zap, Loader2 } from 'lucide-react';
 import { SignedIn, UserButton } from '@clerk/clerk-react';
 import { useUserStats, hasShownSignInPrompt, markSignInPromptShown } from '../../hooks/useUserStats';
 import { Toast } from '../common/Toast';
 import { useResponsiveCardSize } from '../../hooks/useResponsiveCardSize';
 import { useBotAI } from '../../hooks/useBotAI';
 import { useGameAudio } from '../../hooks/useGameAudio';
+import { useImagePreloader } from '../../hooks/useImagePreloader';
 import { VictoryCelebration } from '../common/VictoryCelebration';
 import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
 
@@ -42,6 +43,9 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
   // Game start time for stats tracking
   const gameStartTimeRef = useRef<number>(Date.now());
 
+  // Track if game has been initialized (prevent double-start)
+  const gameInitializedRef = useRef(false);
+
   // User stats hook for recording game results
   const { recordGameResult } = useUserStats();
 
@@ -55,6 +59,21 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
 
   // Tiny bot cards on mobile - just indicators, not detailed views
   const botCardSize = isMobile ? 32 : Math.max(50, cardSize * 0.25);
+
+  // Compute symbols from config (needed for preloader)
+  const symbols = useMemo((): SymbolItem[] => {
+    if (config.customSymbols && config.customSymbols.length === 57) {
+      return config.customSymbols.map((char, index) => ({
+        id: index,
+        char,
+        name: `Symbol ${index}`,
+      }));
+    }
+    return getSymbolsForCardSet(config.cardSetId);
+  }, [config.customSymbols, config.cardSetId]);
+
+  // Preload PNG images (returns immediately for emoji sets)
+  const { loaded: imagesLoaded, progress: loadProgress } = useImagePreloader(symbols);
 
   // Handle match found (by human or bot)
   const handleMatchFound = useCallback((playerId: string, targetCenterCard: CardData) => {
@@ -99,19 +118,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     clearAllBotTimers();
     // Reset game start time for stats tracking
     gameStartTimeRef.current = Date.now();
-    // Get symbols - use custom symbols if provided, otherwise look up by cardSetId
-    let symbols: SymbolItem[];
-    if (config.customSymbols && config.customSymbols.length === 57) {
-      // Use custom symbols provided in config
-      symbols = config.customSymbols.map((char, index) => ({
-        id: index,
-        char,
-        name: `Symbol ${index}`,
-      }));
-    } else {
-      // Use built-in card set
-      symbols = getSymbolsForCardSet(config.cardSetId);
-    }
+    // Use symbols computed at component level (via useMemo)
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration setting
@@ -176,16 +183,19 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     setPenaltyUntil(0);
     setMatchedSymbolId(null);
     setToast(null);
-  }, [config, clearAllBotTimers]);
+  }, [config, clearAllBotTimers, symbols]);
 
-  // Initial mount
+  // Initial mount - wait for images to load before starting
   useEffect(() => {
-    startNewGame();
+    if (imagesLoaded && !gameInitializedRef.current) {
+      gameInitializedRef.current = true;
+      startNewGame();
+    }
     return () => {
       clearAllBotTimers();
       // Note: Music cleanup is handled by useGameAudio hook
     };
-  }, [startNewGame, clearAllBotTimers]);
+  }, [imagesLoaded, startNewGame, clearAllBotTimers]);
 
   const proceedToNextTurn = (winnerId: string) => {
     // Find the winner and their top card BEFORE state updates
@@ -321,6 +331,23 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
     stopMusic();
     onExit();
   };
+
+  // Loading screen for PNG card sets
+  if (!imagesLoaded) {
+    return (
+      <div className="flex flex-col h-screen bg-slate-100 items-center justify-center gap-4">
+        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+        <div className="text-lg font-semibold text-slate-700">Loading card set...</div>
+        <div className="w-48 h-2 bg-slate-200 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-indigo-500 transition-all duration-200"
+            style={{ width: `${loadProgress}%` }}
+          />
+        </div>
+        <div className="text-sm text-slate-500">{loadProgress}%</div>
+      </div>
+    );
+  }
 
   // Victory celebration screen with floating confetti
   if (gameState === GameState.VICTORY_CELEBRATION) {

@@ -49,11 +49,21 @@ const CardSetCard: React.FC<CardSetCardProps> = ({ cardSet, onEdit, onDelete }) 
       </div>
     </div>
     <div className="flex flex-wrap gap-1 text-lg leading-none">
-      {cardSet.symbols.slice(0, 57).map((symbol, idx) => (
-        <span key={idx} title={symbol.name}>
-          {symbol.char}
-        </span>
-      ))}
+      {cardSet.symbols.slice(0, 57).map((symbol, idx) =>
+        symbol.imageUrl ? (
+          <img
+            key={idx}
+            src={symbol.imageUrl}
+            alt={symbol.name}
+            title={symbol.name}
+            className="w-5 h-5 object-contain"
+          />
+        ) : (
+          <span key={idx} title={symbol.name}>
+            {symbol.char}
+          </span>
+        )
+      )}
     </div>
   </div>
 );

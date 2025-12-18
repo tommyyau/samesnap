@@ -207,8 +207,19 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
                       }`}
                     >
                       <div>{cardSet.name}</div>
-                      <div className="text-lg mt-1">
-                        {cardSet.symbols.slice(0, 3).map(s => s.char).join('')}
+                      <div className="text-lg mt-1 flex justify-center gap-0.5">
+                        {cardSet.symbols.slice(0, 3).map((s, i) =>
+                          s.imageUrl ? (
+                            <img
+                              key={i}
+                              src={s.imageUrl}
+                              alt=""
+                              className="w-5 h-5 object-contain"
+                            />
+                          ) : (
+                            <span key={i}>{s.char}</span>
+                          )
+                        )}
                       </div>
                     </button>
                   ))}

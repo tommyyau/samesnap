@@ -4,7 +4,7 @@ import { CardLayout, GameDuration } from '../../shared/types';
 export interface CardSetOption {
   id: string;
   name: string;
-  symbols: { char: string }[];
+  symbols: { char: string; imageUrl?: string }[];
   isBuiltIn: boolean;
 }
 
@@ -81,11 +81,19 @@ export const LobbyConfigPanel: React.FC<LobbyConfigPanelProps> = ({
                 }`}
               >
                 <div>{cardSet.name}</div>
-                <div className="text-base mt-1">
-                  {cardSet.symbols
-                    .slice(0, 3)
-                    .map((s) => s.char)
-                    .join('')}
+                <div className="text-base mt-1 flex justify-center gap-0.5">
+                  {cardSet.symbols.slice(0, 3).map((s, i) =>
+                    s.imageUrl ? (
+                      <img
+                        key={i}
+                        src={s.imageUrl}
+                        alt=""
+                        className="w-5 h-5 object-contain"
+                      />
+                    ) : (
+                      <span key={i}>{s.char}</span>
+                    )
+                  )}
                 </div>
                 {!cardSet.isBuiltIn && (
                   <span className="absolute top-1 right-1 text-[8px] bg-green-500 text-white px-1 rounded">
@@ -147,13 +155,8 @@ export const LobbyConfigPanel: React.FC<LobbyConfigPanelProps> = ({
   // Non-host: read-only config summary
   const selectedSet = getCardSetById(cardSetId);
   const displayName = customSetName ?? selectedSet?.name ?? 'Unknown';
-  const previewSymbols =
-    customSymbols?.slice(0, 3).join('') ??
-    selectedSet?.symbols
-      .slice(0, 3)
-      .map((s) => s.char)
-      .join('') ??
-    '';
+  const previewSymbols = selectedSet?.symbols.slice(0, 3);
+  const hasImages = previewSymbols?.some((s) => s.imageUrl);
 
   return (
     <div className="mb-6 p-3 bg-gray-50 rounded-xl space-y-1">
@@ -161,8 +164,17 @@ export const LobbyConfigPanel: React.FC<LobbyConfigPanelProps> = ({
         <span className="font-semibold">Card Layout:</span>{' '}
         {cardLayout === CardLayout.ORDERLY ? 'Orderly' : 'Chaotic'}
       </p>
-      <p className="text-sm text-gray-500">
-        <span className="font-semibold">Card Set:</span> {displayName} {previewSymbols}
+      <p className="text-sm text-gray-500 flex items-center gap-1">
+        <span className="font-semibold">Card Set:</span> {displayName}{' '}
+        {hasImages ? (
+          <span className="inline-flex gap-0.5">
+            {previewSymbols?.map((s, i) => (
+              <img key={i} src={s.imageUrl} alt="" className="w-4 h-4 object-contain inline" />
+            ))}
+          </span>
+        ) : (
+          customSymbols?.slice(0, 3).join('') ?? previewSymbols?.map((s) => s.char).join('')
+        )}
       </p>
       <p className="text-sm text-gray-500">
         <span className="font-semibold">Game Duration:</span>{' '}
