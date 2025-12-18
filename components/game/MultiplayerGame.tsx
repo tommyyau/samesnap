@@ -161,9 +161,9 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }
   }, [roomState?.rejoinWindowEndsAt]);
 
-  // Reset state when we leave GAME_OVER phase (room was reset)
+  // Reset state when room resets to WAITING phase (new game starting)
   useEffect(() => {
-    if (roomState?.phase !== RoomPhase.GAME_OVER) {
+    if (roomState?.phase === RoomPhase.WAITING) {
       setHasClickedPlayAgain(false);
       setVictoryCelebrationShown(false);
       setShowVictoryCelebration(false);
