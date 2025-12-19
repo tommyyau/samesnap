@@ -29,7 +29,7 @@ const Card: React.FC<CardProps> = ({
   disabled = false,
   highlightError = false,
   highlightSymbolId = null,
-  layoutMode = CardLayout.ORDERLY,
+  layoutMode = CardLayout.CHAOTIC,
   className = '',
   interactive = true,
   label

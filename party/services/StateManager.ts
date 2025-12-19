@@ -171,7 +171,7 @@ export class StateManager {
    */
   initializeDefaultConfig(): void {
     this.config = {
-      cardLayout: CardLayout.ORDERLY,
+      cardLayout: CardLayout.CHAOTIC,
       cardSetId: DEFAULT_CARD_SET_ID,
       gameDuration: GameDuration.MEDIUM,
     };

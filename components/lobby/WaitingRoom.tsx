@@ -21,7 +21,7 @@ interface WaitingRoomProps {
 const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplayerHook }) => {
   const [copied, setCopied] = useState(false);
   // Local state for host controls - always synced from server config when it changes
-  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
+  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.CHAOTIC);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 

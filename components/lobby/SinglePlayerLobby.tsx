@@ -35,7 +35,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
 
   const [botCount, setBotCount] = useState(2);
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
-  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
+  const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.CHAOTIC);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
   const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 

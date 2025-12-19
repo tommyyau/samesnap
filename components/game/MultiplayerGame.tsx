@@ -96,7 +96,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         winReason: roomState.gameEndReason,
         gameDurationMs,
         context: {
-          cardLayout: roomState.config?.cardLayout || CardLayout.ORDERLY,
+          cardLayout: roomState.config?.cardLayout || CardLayout.CHAOTIC,
           cardSetId: roomState.config?.cardSetId || 'default',
           cardSetName,
           playerCount: roomState.players.length,
@@ -410,7 +410,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               <Card
                 card={roomState.yourCard}
                 size={cardSize}
-                layoutMode={roomState.config?.cardLayout || CardLayout.ORDERLY}
+                layoutMode={roomState.config?.cardLayout || CardLayout.CHAOTIC}
                 onClickSymbol={handleSymbolClick}
                 disabled={isPenaltyActive || isAnimating}
                 highlightError={isPenaltyActive}
@@ -436,7 +436,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               <Card
                 card={roomState.centerCard}
                 size={cardSize}
-                layoutMode={roomState.config?.cardLayout || CardLayout.ORDERLY}
+                layoutMode={roomState.config?.cardLayout || CardLayout.CHAOTIC}
                 highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
                 disabled={true}
                 interactive={false}
