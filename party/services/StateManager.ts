@@ -173,7 +173,7 @@ export class StateManager {
     this.config = {
       cardLayout: CardLayout.ORDERLY,
       cardSetId: DEFAULT_CARD_SET_ID,
-      gameDuration: GameDuration.SHORT,
+      gameDuration: GameDuration.MEDIUM,
     };
   }
 

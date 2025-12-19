@@ -23,7 +23,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
   // Local state for host controls - always synced from server config when it changes
   const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
-  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 
   const { roomState, isConnected, isHost, latency, connectionError, setConfig, startGame, leaveRoom, clearError } = multiplayerHook;
 

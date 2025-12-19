@@ -37,7 +37,7 @@ const SinglePlayerLobby: React.FC<SinglePlayerLobbyProps> = ({
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.MEDIUM);
   const [cardLayout, setCardLayout] = useState<CardLayout>(CardLayout.ORDERLY);
   const [cardSetId, setCardSetId] = useState<string>(DEFAULT_CARD_SET_ID);
-  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.SHORT);
+  const [gameDuration, setGameDuration] = useState<GameDuration>(GameDuration.MEDIUM);
 
   // Preload PNG images for selected card set (runs in background during lobby)
   const preloadSymbols = useMemo((): SymbolItem[] => {

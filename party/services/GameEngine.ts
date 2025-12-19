@@ -74,7 +74,7 @@ export class GameEngine {
     this.state.config = {
       cardLayout: config.cardLayout,
       cardSetId: config.cardSetId,
-      gameDuration: config.gameDuration ?? this.state.config?.gameDuration ?? GameDuration.SHORT,
+      gameDuration: config.gameDuration ?? this.state.config?.gameDuration ?? GameDuration.MEDIUM,
       customSymbols: config.customSymbols,
       customSetName: config.customSetName,
     };
@@ -115,7 +115,7 @@ export class GameEngine {
     this.state.config = {
       cardLayout: config.cardLayout,
       cardSetId: config.cardSetId,
-      gameDuration: config.gameDuration ?? this.state.config?.gameDuration ?? GameDuration.SHORT,
+      gameDuration: config.gameDuration ?? this.state.config?.gameDuration ?? GameDuration.MEDIUM,
       customSymbols: config.customSymbols,
       customSetName: config.customSetName,
     };
@@ -186,7 +186,7 @@ export class GameEngine {
     const generatedDeck = generateDeck(7, symbols);
 
     // Truncate deck based on game duration
-    const gameDuration = this.state.config?.gameDuration ?? GameDuration.SHORT;
+    const gameDuration = this.state.config?.gameDuration ?? GameDuration.MEDIUM;
     const deckSize = Math.min(gameDuration, generatedDeck.length);
     this.state.fullDeck = generatedDeck.slice(0, deckSize);
     this.state.roundNumber = 0;
