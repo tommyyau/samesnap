@@ -163,10 +163,11 @@ test('SinglePlayerLobby has gameDuration state', () => {
 test('SinglePlayerLobby includes gameDuration in config', () => {
   const lobbyFile = readFileSync('./components/lobby/SinglePlayerLobby.tsx', 'utf-8');
 
-  // Find the onStart call
-  const onStartMatch = lobbyFile.match(/onStart\(\{[\s\S]*?\}\)/);
-  assert(onStartMatch, 'Should call onStart with config');
-  assert(onStartMatch[0].includes('gameDuration'), 'Config should include gameDuration');
+  // Check that gameConfig includes gameDuration
+  const configMatch = lobbyFile.match(/gameConfig\s*=\s*\{[\s\S]*?\}/);
+  assert(configMatch, 'Should have gameConfig object');
+  assert(configMatch[0].includes('gameDuration'), 'Config should include gameDuration');
+  assert(lobbyFile.includes('onStart(gameConfig)'), 'Should call onStart with gameConfig');
 });
 
 test('SinglePlayerLobby has game duration selector buttons', () => {

@@ -438,13 +438,24 @@ export class GameEngine {
    * Handle play again request
    */
   handlePlayAgain(connectionId: string): void {
+    logger.info(this.room.id, `handlePlayAgain called for connection: ${connectionId}`);
+
     const playerId = this.state.connectionToPlayerId.get(connectionId);
-    if (!playerId) return;
+    if (!playerId) {
+      logger.warn(this.room.id, `handlePlayAgain: No player found for connection ${connectionId}`);
+      return;
+    }
 
     const player = this.state.players.get(playerId);
-    if (!player) return;
+    if (!player) {
+      logger.warn(this.room.id, `handlePlayAgain: Player ${playerId} not in players map`);
+      return;
+    }
+
+    logger.info(this.room.id, `handlePlayAgain: Player ${player.name} (${playerId}), phase=${this.state.phase}`);
 
     if (this.state.phase !== RoomPhase.GAME_OVER) {
+      logger.warn(this.room.id, `handlePlayAgain: Rejected - phase is ${this.state.phase}, not GAME_OVER`);
       this.broadcast.sendError(
         playerId,
         ERROR_CODES.INVALID_STATE,
@@ -454,6 +465,7 @@ export class GameEngine {
     }
 
     if (!this.timers.isRejoinWindowActive()) {
+      logger.warn(this.room.id, `handlePlayAgain: Rejected - rejoin window expired`);
       this.broadcast.sendError(
         playerId,
         ERROR_CODES.INVALID_STATE,
@@ -463,15 +475,15 @@ export class GameEngine {
     }
 
     this.state.playersWantRematch.add(playerId);
-    logger.info(this.room.id, `Player ${player.name} wants rematch. Count: ${this.state.playersWantRematch.size}`);
+    const rematchOrder = Array.from(this.state.playersWantRematch);
+    logger.info(this.room.id, `Player ${player.name} (${playerId}) wants rematch. Order: ${JSON.stringify(rematchOrder)}`);
 
     this.broadcast.broadcastPlayAgainAck(playerId);
 
-    // If 2+ want rematch, reset early
-    if (this.state.playersWantRematch.size >= GAME.MIN_PLAYERS) {
-      logger.info(this.room.id, '2+ players want rematch, resetting room early');
-      this.handleRejoinWindowExpired();
-    }
+    // IMMEDIATELY reset room when first player clicks - they become host right away
+    // Don't wait for 2+ players - better UX to go to waiting room immediately
+    logger.info(this.room.id, `Resetting room immediately for ${player.name} (first-click-becomes-host)`);
+    this.handleRejoinWindowExpired();
   }
 
   /**
@@ -480,46 +492,46 @@ export class GameEngine {
   private handleRejoinWindowExpired(): void {
     this.timers.clearRejoinWindow();
 
-    const rematchPlayers = Array.from(this.state.playersWantRematch).filter(pid => {
-      const player = this.state.players.get(pid);
-      return player && player.status === PlayerStatus.CONNECTED;
-    });
+    // Get all CONNECTED players (not just those who clicked "Play Again")
+    // Everyone goes back to waiting room together when any player clicks
+    const connectedPlayers = Array.from(this.state.players.entries())
+      .filter(([_, player]) => player.status === PlayerStatus.CONNECTED)
+      .map(([pid, _]) => pid);
 
-    logger.info(this.room.id, `Rejoin window expired. Rematch players: ${rematchPlayers.length}`);
+    // But respect the click ORDER for host assignment - first to click becomes host
+    const clickOrder = Array.from(this.state.playersWantRematch).filter(pid =>
+      connectedPlayers.includes(pid)
+    );
 
-    if (rematchPlayers.length === 0) {
-      logger.info(this.room.id, 'No players want rematch, resetting room');
+    logger.info(this.room.id, `Rejoin: ${connectedPlayers.length} connected, ${clickOrder.length} clicked Play Again`);
+
+    if (connectedPlayers.length === 0) {
+      logger.info(this.room.id, 'No connected players, resetting room');
       this.broadcast.broadcastRoomExpired('No players rejoined after game over');
       this.resetRoomForNewGame();
       return;
     }
 
-    if (rematchPlayers.length === 1) {
-      const soloPlayerId = rematchPlayers[0];
-      logger.info(this.room.id, 'Only 1 player rejoined, booting them');
+    // Reset room with ALL connected players, but host is first to click "Play Again"
+    // If no one clicked yet (timer expiry), first connected player becomes host
+    const orderedPlayers = clickOrder.length > 0
+      ? [...clickOrder, ...connectedPlayers.filter(pid => !clickOrder.includes(pid))]
+      : connectedPlayers;
 
-      this.broadcast.sendToPlayer(soloPlayerId, {
-        type: 'solo_rejoin_boot',
-        payload: { message: "You're the only one who rejoined. Please create a new room." },
-      });
-
-      const player = this.state.players.get(soloPlayerId);
-      if (player) {
-        const conn = this.room.getConnection(player.connectionId);
-        if (conn) setTimeout(() => conn.close(), 100);
-      }
-      return;
-    }
-
-    // 2+ players - reset room
-    logger.info(this.room.id, `${rematchPlayers.length} players want rematch, resetting room`);
-    this.resetRoom(rematchPlayers);
+    logger.info(this.room.id, `Resetting room with ${orderedPlayers.length} player(s), host will be first in order`);
+    this.resetRoom(orderedPlayers);
   }
 
   /**
    * Reset room for rematch (keeping specified players)
    */
   private resetRoom(keepPlayerIds: string[]): void {
+    logger.info(this.room.id, `resetRoom called with keepPlayerIds: ${JSON.stringify(keepPlayerIds)}`);
+
+    // Log current players before removal
+    const currentPlayerIds = Array.from(this.state.players.keys());
+    logger.info(this.room.id, `Current players before removal: ${JSON.stringify(currentPlayerIds)}`);
+
     // Remove players who didn't want rematch
     const playersToRemove: string[] = [];
     Array.from(this.state.players.keys()).forEach(playerId => {
@@ -527,6 +539,8 @@ export class GameEngine {
         playersToRemove.push(playerId);
       }
     });
+
+    logger.info(this.room.id, `Players to remove: ${JSON.stringify(playersToRemove)}`);
 
     for (const pid of playersToRemove) {
       const player = this.state.players.get(pid);
@@ -543,9 +557,20 @@ export class GameEngine {
     this.state.resetGameState();
     this.state.disconnectedPlayers.clear();
 
+    // Log remaining players after reset
+    const remainingPlayers = Array.from(this.state.players.entries()).map(([id, p]) => ({
+      id,
+      name: p.name,
+      isHost: p.isHost,
+      status: p.status
+    }));
+    logger.info(this.room.id, `Players after resetGameState: ${JSON.stringify(remainingPlayers)}`);
+
     // Assign host to first player who clicked "Play Again" (keepPlayerIds is in order)
     const newHostId = keepPlayerIds[0];
     const newHost = this.state.players.get(newHostId);
+    logger.info(this.room.id, `Attempting to assign host: newHostId=${newHostId}, found=${!!newHost}`);
+
     if (newHost) {
       // Clear old host flags
       this.state.players.forEach(p => {
@@ -556,7 +581,17 @@ export class GameEngine {
       this.state.hostId = newHostId;
       this.broadcast.sendToPlayer(newHostId, { type: 'you_are_host', payload: {} });
       logger.info(this.room.id, `New host for rematch: ${newHost.name} (first to click Play Again)`);
+    } else {
+      logger.error(this.room.id, `FAILED to assign host! newHostId=${newHostId} not found in players map`);
     }
+
+    // Log final state before broadcast
+    const finalPlayers = Array.from(this.state.players.entries()).map(([id, p]) => ({
+      id,
+      name: p.name,
+      isHost: p.isHost
+    }));
+    logger.info(this.room.id, `Final players state before broadcast: ${JSON.stringify(finalPlayers)}`);
 
     // Re-arm room timeout
     this.timers.startRoomTimeout(() => this.handleRoomExpired());

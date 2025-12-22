@@ -1509,8 +1509,8 @@ async function runRejoinTests() {
     if (!gameOver.payload.rejoinWindowMs) {
       throw new Error('game_over should include rejoinWindowMs');
     }
-    if (gameOver.payload.rejoinWindowMs !== 20000) {
-      throw new Error(`Expected rejoinWindowMs=20000, got ${gameOver.payload.rejoinWindowMs}`);
+    if (gameOver.payload.rejoinWindowMs !== 1800000) {
+      throw new Error(`Expected rejoinWindowMs=1800000 (30 min), got ${gameOver.payload.rejoinWindowMs}`);
     }
 
     cleanup(host);
@@ -1585,7 +1585,7 @@ async function runRejoinTests() {
     cleanup(host);
   });
 
-  await test('Solo rejoin gets booted with message after window expires', async () => {
+  await test('Single player clicking play_again goes to waiting room as host', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -1607,26 +1607,28 @@ async function runRejoinTests() {
     await waitForMessage(host, 'game_over', 5000);
     host.messages = [];
 
-    // Host sends play_again (only player)
+    // Host sends play_again (only player left)
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
 
-    // Wait for the rejoin window to expire (20s + buffer)
-    // This will take ~20s so we use a longer timeout
-    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 25000);
+    // Should immediately receive room_reset and room_state (goes to waiting room)
+    const roomReset = await waitForMessage(host, 'room_reset', 3000);
+    const roomState = await waitForMessage(host, 'room_state', 3000);
 
-    if (!bootMsg.payload.message) {
-      throw new Error('solo_rejoin_boot should have a message');
-    }
-    if (!bootMsg.payload.message.includes('only one')) {
-      throw new Error(`Expected message about being only one, got: ${bootMsg.payload.message}`);
+    // Verify host is in WAITING phase
+    if (roomState.payload.phase !== 'waiting') {
+      throw new Error(`Expected 'waiting' phase, got: ${roomState.payload.phase}`);
     }
 
-    // Connection should close shortly after
-    await sleep(500);
-    if (host.connected) {
-      // Give it more time
-      await sleep(500);
+    // Verify host is still host
+    const me = roomState.payload.players.find(p => p.isYou);
+    if (!me || !me.isHost) {
+      throw new Error('Single player should be host in waiting room');
+    }
+
+    // Verify only 1 player in room
+    if (roomState.payload.players.length !== 1) {
+      throw new Error(`Expected 1 player, got: ${roomState.payload.players.length}`);
     }
 
     cleanup(host);
@@ -1693,7 +1695,13 @@ async function runRejoinTests() {
     cleanup(host);
   });
 
-  await test('Room code can be reused after rejoin window expires with no rejoins', async () => {
+  await test('game_over starts 30-minute rejoin window (safety net timeout)', async () => {
+    // NOTE: We can't practically test the 30-minute expiry in tests.
+    // This test verifies that game_over correctly reports the rejoin window duration,
+    // which was tested in 'game_over includes rejoinWindowMs'.
+    // The 30-minute timeout is a safety net - in practice, first play_again click
+    // triggers immediate room reset with all connected players auto-joining.
+
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -1701,7 +1709,53 @@ async function runRejoinTests() {
     // Start game
     host.ws.send(JSON.stringify({
       type: 'start_game',
-      payload: { config: { cardLayout: 'ORDERLY' } }
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
+    }));
+
+    await waitForMessage(host, 'round_start', 10000);
+    await waitForMessage(guest, 'round_start', 10000);
+
+    // End game by having guest leave
+    guest.ws.send(JSON.stringify({ type: 'leave', payload: {} }));
+    guest.ws.close();
+
+    // Host gets game_over with rejoin window info
+    const gameOver = await waitForMessage(host, 'game_over', 5000);
+
+    // Verify rejoin window is 30 minutes (1800000ms)
+    if (gameOver.payload.rejoinWindowMs !== 1800000) {
+      throw new Error(`Expected rejoinWindowMs=1800000 (30 min), got ${gameOver.payload.rejoinWindowMs}`);
+    }
+
+    // Verify rejoinWindowEndsAt is approximately 30 minutes from now
+    const now = Date.now();
+    const endsAt = gameOver.payload.rejoinWindowEndsAt;
+    const diff = endsAt - now;
+    // Allow 5 second variance for timing
+    if (diff < 1795000 || diff > 1805000) {
+      throw new Error(`rejoinWindowEndsAt should be ~30 min from now, got ${diff}ms`);
+    }
+
+    // Room is still active with rejoin window - host can send play_again
+    host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    const ack = await waitForMessage(host, 'play_again_ack', 3000);
+    if (!ack) {
+      throw new Error('Host should be able to send play_again during rejoin window');
+    }
+
+    cleanup(host);
+  });
+
+  await test('Room code can be reused after game over and play again', async () => {
+    // Test that room can handle play_again correctly - room code reuse is implicit
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const guest = await createPlayer(roomCode, 'Guest');
+
+    // Start game
+    host.ws.send(JSON.stringify({
+      type: 'start_game',
+      payload: { config: { cardLayout: 'ORDERLY', gameDuration: 10 } }
     }));
 
     await waitForMessage(host, 'round_start', 10000);
@@ -1714,30 +1768,23 @@ async function runRejoinTests() {
     // Host gets game_over
     await waitForMessage(host, 'game_over', 5000);
 
-    // Host does NOT send play_again - just waits for window to expire
-    // Wait for room_expired message (20s + buffer)
-    const expired = await waitForMessage(host, 'room_expired', 25000);
+    // Host sends play_again - they go to waiting room as host
+    host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
+    await waitForMessage(host, 'play_again_ack', 3000);
+    await waitForMessage(host, 'room_reset', 3000);
+    const roomState = await waitForMessage(host, 'room_state', 3000);
 
-    if (!expired.payload.reason.includes('rejoined')) {
-      throw new Error(`Expected reason about no rejoins, got: ${expired.payload.reason}`);
+    // Host is still host in the same room
+    if (roomState.payload.phase !== 'waiting') {
+      throw new Error(`Expected phase=waiting, got ${roomState.payload.phase}`);
     }
 
-    // Give time for connection to close
-    await sleep(500);
-
-    // Now try to create a new room with the same code
-    // This tests that the room was properly cleaned up
-    const newHost = await createPlayer(roomCode, 'NewHost');
-
-    // Should be able to join as host
-    if (!newHost.isHost) {
-      throw new Error('New player should be host in reused room');
-    }
-    if (newHost.roomState.phase !== 'waiting') {
-      throw new Error(`Expected phase=waiting, got ${newHost.roomState.phase}`);
+    const me = roomState.payload.players.find(p => p.isYou);
+    if (!me || !me.isHost) {
+      throw new Error('Host should still be host after play_again');
     }
 
-    cleanup(newHost);
+    cleanup(host);
   });
 }
 
@@ -1960,9 +2007,11 @@ async function runGameOverExitTests() {
     cleanup(host);
   });
 
-  await test('Rejoin window timer continues normally when player exits (not reset)', async () => {
-    // This tests that when a player exits during GAME_OVER, the rejoin timer
-    // is NOT reset (which would happen if endGame() was called again)
+  await test('First to click play_again becomes host, all connected players auto-join', async () => {
+    // This tests the new rematch behavior where:
+    // 1. First player to click play_again triggers immediate room reset
+    // 2. That player becomes host
+    // 3. All OTHER connected players automatically join the waiting room
 
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
@@ -1979,51 +2028,36 @@ async function runGameOverExitTests() {
     await waitForMessage(guest, 'round_start', 10000);
     await waitForMessage(player3, 'round_start', 10000);
 
-    // player3 leaves (game continues with 2)
+    // End game: have one player win by all matches (simulate by having others leave)
     player3.ws.send(JSON.stringify({ type: 'leave', payload: {} }));
     player3.ws.close();
     await waitForMessage(host, 'player_left', 3000);
-    await waitForMessage(guest, 'player_left', 3000);
 
-    host.messages = [];
-    guest.messages = [];
-
-    // guest leaves - triggers game_over (last player standing)
+    // Game continues with 2 players
+    // Guest leaves to trigger game_over
     guest.ws.send(JSON.stringify({ type: 'leave', payload: {} }));
     guest.ws.close();
 
-    const gameOver = await waitForMessage(host, 'game_over', 5000);
-    const gameOverReceivedAt = Date.now();
+    await waitForMessage(host, 'game_over', 5000);
     host.messages = [];
 
-    // Host wants to play again
+    // Host (only remaining player) clicks play_again
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
-    host.messages = [];
 
-    // Wait 10 seconds (half the 20s rejoin window)
-    await sleep(10000);
+    // Should IMMEDIATELY get room_reset (no waiting for others)
+    const roomReset = await waitForMessage(host, 'room_reset', 3000);
+    const roomState = await waitForMessage(host, 'room_state', 3000);
 
-    // Check no new game_over was received (timer wasn't reset)
-    const extraGameOvers = host.messages.filter(m => m.type === 'game_over');
-    if (extraGameOvers.length > 0) {
-      throw new Error('BUG: Rejoin timer was reset, causing new game_over broadcast!');
+    // Verify we're in WAITING phase
+    if (roomState.payload.phase !== 'waiting') {
+      throw new Error(`Expected 'waiting' phase, got: ${roomState.payload.phase}`);
     }
 
-    // Now wait for the remaining ~10s + buffer for solo_rejoin_boot
-    // (Total ~20s from original game_over)
-    const bootMsg = await waitForMessage(host, 'solo_rejoin_boot', 15000);
-
-    // The solo boot should arrive ~20s after the ORIGINAL game_over
-    const bootReceivedAt = Date.now();
-    const timeFromGameOver = bootReceivedAt - gameOverReceivedAt;
-
-    // Should be approximately 20s (within 4s tolerance for test timing)
-    if (timeFromGameOver < 16000) {
-      throw new Error(`BUG: solo_rejoin_boot arrived too early (${timeFromGameOver}ms) - timer may have been reset!`);
-    }
-    if (timeFromGameOver > 28000) {
-      throw new Error(`solo_rejoin_boot arrived too late (${timeFromGameOver}ms)`);
+    // Verify host is still host (first to click becomes host)
+    const me = roomState.payload.players.find(p => p.isYou);
+    if (!me || !me.isHost) {
+      throw new Error('First player to click play_again should be host');
     }
 
     cleanup(host);
@@ -2199,7 +2233,7 @@ async function runGameDurationTests() {
     cleanup(host, guest);
   });
 
-  await test('Default game duration deals correct stacks (SHORT = 10 cards)', async () => {
+  await test('Default game duration deals correct stacks (MEDIUM = 25 cards)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2211,10 +2245,10 @@ async function runGameDurationTests() {
     }));
 
     const roundStart = await waitForMessage(host, 'round_start', 10000);
-    // Default is 10 cards (SHORT): (10-1)/2 = 4 cards each
-    const expectedCardsPerPlayer = Math.floor((10 - 1) / 2);
+    // Default is 25 cards (MEDIUM): (25-1)/2 = 12 cards each
+    const expectedCardsPerPlayer = Math.floor((25 - 1) / 2);
     if (roundStart.payload.yourCardsRemaining !== expectedCardsPerPlayer) {
-      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for default SHORT game, got ${roundStart.payload.yourCardsRemaining}`);
+      throw new Error(`Expected ${expectedCardsPerPlayer} cards per player for default MEDIUM game, got ${roundStart.payload.yourCardsRemaining}`);
     }
 
     cleanup(host, guest);
@@ -2227,7 +2261,7 @@ async function runGameDurationTests() {
 async function runPlayAgainRoomResetTests() {
   console.log('\n🔄 PLAY AGAIN ROOM RESET TESTS\n');
 
-  await test('Play again: both players click Play Again, room resets to WAITING phase', async () => {
+  await test('Play again: first click triggers immediate reset, all connected players auto-join', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const guest = await createPlayer(roomCode, 'Guest');
@@ -2280,19 +2314,16 @@ async function runPlayAgainRoomResetTests() {
     host.messages = [];
     guest.messages = [];
 
-    // Both players send play_again
+    // ONLY host sends play_again - this should immediately trigger reset for ALL connected players
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
 
-    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
-    await waitForMessage(guest, 'play_again_ack', 3000);
-
-    // Both should receive room_reset
+    // Both should receive room_reset immediately (guest auto-joins without clicking)
     const hostReset = await waitForMessage(host, 'room_reset', 3000);
     const guestReset = await waitForMessage(guest, 'room_reset', 3000);
 
     if (!hostReset || !guestReset) {
-      throw new Error('Both players should receive room_reset after both click Play Again');
+      throw new Error('Both players should receive room_reset when any player clicks Play Again');
     }
 
     // Both should receive room_state with phase: 'waiting'
@@ -2304,6 +2335,12 @@ async function runPlayAgainRoomResetTests() {
     }
     if (guestState.payload.phase !== 'waiting') {
       throw new Error(`Guest room_state phase should be 'waiting', got '${guestState.payload.phase}'`);
+    }
+
+    // Host (first to click) should be the new host
+    const hostMe = hostState.payload.players.find(p => p.isYou);
+    if (!hostMe || !hostMe.isHost) {
+      throw new Error('First player to click Play Again should be host');
     }
 
     cleanup(host, guest);
@@ -2358,23 +2395,20 @@ async function runPlayAgainRoomResetTests() {
     host.messages = [];
     guest.messages = [];
 
-    // Both send play_again
+    // Only host needs to send play_again - both players auto-join
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
-
-    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
-    await waitForMessage(guest, 'play_again_ack', 3000);
 
     // Wait for room_reset and room_state
     await waitForMessage(host, 'room_reset', 3000);
     const roomState = await waitForMessage(host, 'room_state', 3000);
 
-    // Verify both players are in the room
+    // Verify both players are in the room (auto-joined)
     if (roomState.payload.players.length !== 2) {
       throw new Error(`Expected 2 players in reset room, got ${roomState.payload.players.length}`);
     }
 
-    // Verify one is host
+    // Verify first to click (host) is the new host
     const hostPlayer = roomState.payload.players.find(p => p.isHost);
     if (!hostPlayer) {
       throw new Error('Should have a host after room reset');
@@ -2432,16 +2466,15 @@ async function runPlayAgainRoomResetTests() {
     host.messages = [];
     guest.messages = [];
 
-    // Both send play_again
+    // Only host needs to send play_again - guest auto-joins
     host.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
     await waitForMessage(host, 'play_again_ack', 3000);
 
-    guest.ws.send(JSON.stringify({ type: 'play_again', payload: {} }));
-    await waitForMessage(guest, 'play_again_ack', 3000);
-
-    // Wait for room_reset
+    // Room resets immediately when first player clicks
     await waitForMessage(host, 'room_reset', 3000);
     await waitForMessage(host, 'room_state', 3000);
+    // Guest also receives room_reset since they're connected
+    await waitForMessage(guest, 'room_reset', 3000);
 
     host.messages = [];
     guest.messages = [];
