@@ -195,9 +195,10 @@ export class StateManager {
     this.rejoinWindowEndsAt = null;
     this.currentCountdown = null;
 
-    // Reset player card stacks
+    // Reset player state for new game
     this.players.forEach(player => {
       player.cardStack = [];
+      player.status = PlayerStatus.CONNECTED; // Reset status for rematch
     });
   }
 
