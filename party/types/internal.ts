@@ -14,16 +14,18 @@ export const TIMING = {
   PENALTY_DURATION_MS: 3000,
   /** Window to collect simultaneous match attempts for arbitration */
   ARBITRATION_WINDOW_MS: 100,
-  /** Grace period for reconnection after disconnect */
+  /** Grace period for reconnection after disconnect (non-host, during game) */
   RECONNECT_GRACE_PERIOD_MS: 5000,
-  /** Time to fill the room before it expires */
-  ROOM_TIMEOUT_MS: 60000,
+  /** Grace period for HOST reconnection (any phase) - 5 minutes */
+  HOST_RECONNECT_GRACE_PERIOD_MS: 300000,
+  /** Time to fill the room before it expires - 30 minutes (host controls start) */
+  ROOM_TIMEOUT_MS: 1800000,
   /** Time to rejoin after game over */
   REJOIN_WINDOW_MS: 20000,
   /** Rate limit: max match attempts per second */
   MAX_MATCH_ATTEMPTS_PER_SECOND: 10,
-  /** Grace period during WAITING phase (shorter for React StrictMode) */
-  WAITING_GRACE_PERIOD_MS: 2000,
+  /** Grace period during WAITING phase - 5 minutes (no urgency, host controls start) */
+  WAITING_GRACE_PERIOD_MS: 300000,
   /** Countdown duration in seconds */
   COUNTDOWN_SECONDS: 5,
   /** Delay between round end and next round */

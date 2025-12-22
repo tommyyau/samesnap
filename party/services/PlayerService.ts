@@ -102,9 +102,8 @@ export class PlayerService {
       this.state.initializeDefaultConfig();
       this.broadcast.sendToPlayer(playerId, { type: 'you_are_host', payload: {} });
       this.timers.startRoomTimeout(onRoomTimeout);
-    } else {
-      this.timers.refreshRoomTimeout(onRoomTimeout);
     }
+    // No refresh on player join - 30-minute timeout is sufficient
 
     // Notify all players
     this.broadcast.broadcastPlayerJoined(player);
@@ -151,9 +150,9 @@ export class PlayerService {
 
     this.broadcast.broadcastPlayerDisconnected(playerId);
 
-    // Start grace period
+    // Start grace period (host gets extended grace in all phases)
     const isWaiting = this.state.phase === RoomPhase.WAITING;
-    this.timers.startGracePeriod(playerId, isWaiting, onGraceExpire);
+    this.timers.startGracePeriod(playerId, isWaiting, player.isHost, onGraceExpire);
   }
 
   // ============================================
@@ -189,11 +188,7 @@ export class PlayerService {
     }
 
     this.broadcast.broadcastPlayerReconnected(playerId);
-
-    // Refresh room timeout if in waiting phase
-    if (this.state.phase === RoomPhase.WAITING) {
-      this.timers.refreshRoomTimeout(onRoomTimeout);
-    }
+    // No refresh on reconnect - 30-minute timeout is sufficient
 
     this.broadcast.sendRoomState(playerId);
     return true;

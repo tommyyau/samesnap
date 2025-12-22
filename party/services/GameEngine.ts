@@ -582,7 +582,7 @@ export class GameEngine {
     if (this.state.phase !== RoomPhase.WAITING) return;
 
     logger.info(this.room.id, 'Lobby timer expired');
-    this.broadcast.broadcastRoomExpired('Room timed out before the game started. Please create a new room.');
+    this.broadcast.broadcastRoomExpired('Room closed due to inactivity. Please create a new room.');
     this.players.closeAllConnections();
   }
 }

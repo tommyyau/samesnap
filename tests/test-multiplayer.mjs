@@ -338,60 +338,66 @@ async function runRoomTests() {
     cleanup(guest1, guest2);
   });
 
-  await test('Room timeout refreshes when new players join', async () => {
+  await test('Room timeout is set once when host joins (no refresh on player join)', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const initialExpiry = host.roomState.roomExpiresAt;
 
     if (!initialExpiry) throw new Error('Host should receive roomExpiresAt');
 
-    // Small delay to ensure time passes
     await sleep(100);
-
-    // Join with second player
     const player2 = await createPlayer(roomCode, 'Player2');
 
-    // Verify timeout was extended (new expiry > initial expiry)
-    if (player2.roomState.roomExpiresAt <= initialExpiry) {
-      throw new Error('Room expiry should be extended after new player joins');
+    // Verify timeout was NOT extended (should be same or very close)
+    const diff = Math.abs(player2.roomState.roomExpiresAt - initialExpiry);
+    if (diff > 1000) {
+      throw new Error('Room expiry should NOT change when new player joins');
     }
-
-    // Verify new expiry is ~60s from join time (within tolerance)
-    const newTimeRemaining = player2.roomState.roomExpiresAt - Date.now();
-    if (newTimeRemaining <= 58000 || newTimeRemaining > 60500) {
-      throw new Error(`Expected ~60s remaining, got ${newTimeRemaining}ms`);
-    }
-
-    // Host should receive player_joined notification (expiry not included in this message)
-    await waitForMessage(host, 'player_joined', 2000);
 
     cleanup(host, player2);
   });
 
-  await test('Room timeout refreshes on player reconnection', async () => {
+  await test('Host has extended grace period (5 minutes) for reconnection', async () => {
     const roomCode = generateRoomCode();
     const host = await createPlayer(roomCode, 'Host');
     const player2 = await createPlayer(roomCode, 'Player2');
+    const hostId = host.playerId;
 
-    const initialExpiry = player2.roomState.roomExpiresAt;
-    const playerId = player2.playerId;
+    // Disconnect host
+    host.ws.close();
+    await waitForMessage(player2, 'player_disconnected', 3000);
+
+    // Wait longer than old 2s/5s grace period
+    await sleep(10000); // 10 seconds
+
+    // Host should still be able to reconnect
+    const reconnected = await createPlayer(roomCode, 'ReconnectedHost', { reconnectId: hostId });
+
+    if (!reconnected.roomState.players.some(p => p.id === hostId)) {
+      throw new Error('Host should still exist after 10s disconnect (5 min grace)');
+    }
+
+    cleanup(reconnected, player2);
+  });
+
+  await test('Non-host in WAITING phase has extended grace period', async () => {
+    const roomCode = generateRoomCode();
+    const host = await createPlayer(roomCode, 'Host');
+    const player2 = await createPlayer(roomCode, 'Player2');
+    const player2Id = player2.playerId;
 
     // Disconnect player2
     player2.ws.close();
-    await sleep(500);
-
-    // Wait for disconnect to be processed
     await waitForMessage(host, 'player_disconnected', 3000);
 
-    // Small delay
-    await sleep(100);
+    // Wait longer than old 2s grace period
+    await sleep(5000); // 5 seconds
 
-    // Reconnect player2
-    const reconnected = await createPlayer(roomCode, 'Player2', { reconnectId: playerId });
+    // Player2 should still be able to reconnect
+    const reconnected = await createPlayer(roomCode, 'Player2', { reconnectId: player2Id });
 
-    // Verify timeout was extended
-    if (reconnected.roomState.roomExpiresAt <= initialExpiry) {
-      throw new Error('Reconnection should refresh room timeout');
+    if (!reconnected.roomState.players.some(p => p.id === player2Id)) {
+      throw new Error('Non-host should still exist after 5s disconnect in WAITING (5 min grace)');
     }
 
     cleanup(host, reconnected);

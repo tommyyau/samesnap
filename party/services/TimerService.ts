@@ -171,13 +171,24 @@ export class TimerService {
 
   /**
    * Start a grace period for a disconnected player
+   * Host gets extended grace period in all phases
+   * Non-host in WAITING gets extended grace (no urgency)
+   * Non-host during PLAYING gets short grace
    */
-  startGracePeriod(playerId: string, isWaiting: boolean, onExpire: VoidCallback): void {
+  startGracePeriod(playerId: string, isWaiting: boolean, isHost: boolean, onExpire: VoidCallback): void {
     this.clearGracePeriod(playerId);
 
-    const duration = isWaiting
-      ? TIMING.WAITING_GRACE_PERIOD_MS
-      : TIMING.RECONNECT_GRACE_PERIOD_MS;
+    let duration: number;
+    if (isHost) {
+      // Host always gets extended grace period (5 minutes)
+      duration = TIMING.HOST_RECONNECT_GRACE_PERIOD_MS;
+    } else if (isWaiting) {
+      // Non-host in waiting phase gets extended grace (5 minutes)
+      duration = TIMING.WAITING_GRACE_PERIOD_MS;
+    } else {
+      // Non-host during game gets short grace (5 seconds)
+      duration = TIMING.RECONNECT_GRACE_PERIOD_MS;
+    }
 
     const timeoutId = setTimeout(() => {
       this.gracePeriodTimeouts.delete(playerId);

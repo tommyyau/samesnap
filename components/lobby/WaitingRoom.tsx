@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Copy, Check, Wifi, WifiOff, Play, LogOut, Users, Clock } from 'lucide-react';
+import { Copy, Check, Wifi, WifiOff, Play, LogOut, Users } from 'lucide-react';
 import { CardLayout, GameDuration, RoomPhase, SymbolItem } from '../../shared/types';
 import { getBuiltInCardSets, getSymbolsForCardSet, DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import { useCustomCardSets } from '../../hooks/useCustomCardSets';
-import { useRoomCountdown } from '../../hooks/useRoomCountdown';
 import { useImagePreloader } from '../../hooks/useImagePreloader';
 import type { useMultiplayerGame } from '../../hooks/useMultiplayerGame';
 import { unlockAudio, startBackgroundMusic } from '../../utils/sound';
@@ -52,9 +51,6 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
 
   // Start preloading as soon as card set is selected (fire-and-forget)
   useImagePreloader(preloadSymbols);
-
-  // Room timeout countdown (clock-skew safe)
-  const timeLeft = useRoomCountdown(roomState?.roomExpiresInMs);
 
   // Always sync local state FROM server config when it changes
   useEffect(() => {
@@ -185,20 +181,6 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
             </div>
             <p className="text-gray-400 text-xs mt-1">Click to copy</p>
           </div>
-
-          {/* Prominent Countdown Timer */}
-          {timeLeft !== null && timeLeft > 0 && (
-            <div className="text-center mb-4 p-4 bg-gradient-to-r from-orange-100 to-yellow-100 rounded-2xl border-2 border-orange-300">
-              <div className="flex items-center justify-center gap-3 mb-2">
-                <Clock size={32} className="text-orange-600 animate-pulse" />
-                <span className="text-4xl font-black text-orange-600">{timeLeft}s</span>
-              </div>
-              <p className="text-sm text-orange-700 font-medium">Game starts when timer ends</p>
-              <p className="text-xs text-orange-500 mt-1">
-                {isHost ? 'Or click "Start Now" with 2+ players' : 'Host can start early with 2+ players'}
-              </p>
-            </div>
-          )}
 
           {/* Status Messages */}
           {currentPlayers < 2 && (
