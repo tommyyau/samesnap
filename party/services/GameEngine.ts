@@ -543,17 +543,19 @@ export class GameEngine {
     this.state.resetGameState();
     this.state.disconnectedPlayers.clear();
 
-    // Ensure host
-    if (!this.state.hostId || !this.state.players.has(this.state.hostId)) {
-      const firstPlayer = Array.from(this.state.players.values())[0];
-      if (firstPlayer) {
-        this.state.players.forEach(p => {
-          p.isHost = false;
-        });
-        firstPlayer.isHost = true;
-        this.state.hostId = firstPlayer.id;
-        this.broadcast.sendToPlayer(firstPlayer.id, { type: 'you_are_host', payload: {} });
-      }
+    // Assign host to first player who clicked "Play Again" (keepPlayerIds is in order)
+    const newHostId = keepPlayerIds[0];
+    const newHost = this.state.players.get(newHostId);
+    if (newHost) {
+      // Clear old host flags
+      this.state.players.forEach(p => {
+        p.isHost = false;
+      });
+      // Set new host
+      newHost.isHost = true;
+      this.state.hostId = newHostId;
+      this.broadcast.sendToPlayer(newHostId, { type: 'you_are_host', payload: {} });
+      logger.info(this.room.id, `New host for rematch: ${newHost.name} (first to click Play Again)`);
     }
 
     // Re-arm room timeout
