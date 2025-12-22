@@ -20,8 +20,8 @@ export const TIMING = {
   HOST_RECONNECT_GRACE_PERIOD_MS: 300000,
   /** Time to fill the room before it expires - 30 minutes (host controls start) */
   ROOM_TIMEOUT_MS: 1800000,
-  /** Time to rejoin after game over */
-  REJOIN_WINDOW_MS: 20000,
+  /** Time to rejoin after game over - 30 minutes (no pressure to rematch) */
+  REJOIN_WINDOW_MS: 1800000,
   /** Rate limit: max match attempts per second */
   MAX_MATCH_ATTEMPTS_PER_SECOND: 10,
   /** Grace period during WAITING phase - 5 minutes (no urgency, host controls start) */
