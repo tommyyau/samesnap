@@ -231,7 +231,7 @@ const WaitingRoom: React.FC<WaitingRoomProps> = ({ roomCode, onLeave, multiplaye
               </button>
             ) : !isHost ? (
               <div className="text-center py-4 bg-gray-100 rounded-2xl text-gray-500 font-semibold">
-                Waiting for players to join...
+                {currentPlayers >= 2 ? 'Waiting for host to start...' : 'Waiting for players to join...'}
               </div>
             ) : null}
 
