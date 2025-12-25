@@ -402,7 +402,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
         </div>
 
         {/* Center Arena - evenly spaced on mobile, centered on desktop */}
-        <div className="flex-1 flex flex-col md:flex-row items-center justify-evenly md:justify-center gap-4 sm:gap-6 md:gap-16 w-full max-w-6xl">
+        <div className="flex-1 flex flex-col-reverse md:flex-row items-center justify-evenly md:justify-center gap-4 sm:gap-6 md:gap-16 w-full max-w-6xl">
 
           {/* Your Card */}
           <div className="relative">

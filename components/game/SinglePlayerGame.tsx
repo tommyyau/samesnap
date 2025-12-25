@@ -452,7 +452,7 @@ const SinglePlayerGame: React.FC<SinglePlayerGameProps> = ({ config, onExit }) =
           </div>
 
           {/* Main Card Area - Evenly spaced on mobile, centered on desktop */}
-          <div className="flex-1 flex flex-col md:flex-row items-center justify-evenly md:justify-center max-w-6xl mx-auto w-full gap-4 sm:gap-6 md:gap-8 px-1 sm:px-4 md:px-10">
+          <div className="flex-1 flex flex-col-reverse md:flex-row items-center justify-evenly md:justify-center max-w-6xl mx-auto w-full gap-4 sm:gap-6 md:gap-8 px-1 sm:px-4 md:px-10">
 
             {/* Player Hand (LEFT) */}
             <div className="relative">
