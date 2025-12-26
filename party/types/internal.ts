@@ -29,7 +29,7 @@ export const TIMING = {
   /** Countdown duration in seconds */
   COUNTDOWN_SECONDS: 5,
   /** Delay between round end and next round (used for leaderboard display) */
-  ROUND_TRANSITION_DELAY_MS: 2000,
+  ROUND_TRANSITION_DELAY_MS: 3500,
   /** Window to capture close-call attempts after winner determined (non-winners can still click) */
   CLOSE_CALL_CAPTURE_MS: 1500,
 } as const;

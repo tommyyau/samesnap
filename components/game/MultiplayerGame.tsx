@@ -337,6 +337,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const isAnimating = roomState.phase === RoomPhase.ROUND_END;
   const isYouWinner = isAnimating && you?.id === roomState.roundWinnerId;
   const isOpponentWinner = isAnimating && !isYouWinner && roomState.roundWinnerId;
+  // Winners see highlight immediately, non-winners see it after 1.5s overlay delay
+  const shouldHighlightSymbol = isYouWinner || showRoundEndOverlay;
 
   const handleErrorRetry = () => {
     clearError();
@@ -454,7 +456,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 onClickSymbol={handleSymbolClick}
                 disabled={isPenaltyActive || showRoundEndOverlay}
                 highlightError={isPenaltyActive}
-                highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
+                highlightSymbolId={shouldHighlightSymbol ? roomState.roundMatchedSymbolId : null}
                 className="border-indigo-500 bg-indigo-50 shadow-indigo-200"
                 interactive={true}
                 label={you?.name || 'You'}
@@ -477,7 +479,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 card={roomState.centerCard}
                 size={cardSize}
                 layoutMode={roomState.config?.cardLayout || CardLayout.CHAOTIC}
-                highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
+                highlightSymbolId={shouldHighlightSymbol ? roomState.roundMatchedSymbolId : null}
                 disabled={true}
                 interactive={false}
                 label="Snap Card"
