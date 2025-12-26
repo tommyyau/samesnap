@@ -8,7 +8,7 @@
  * - Arbitration window for simultaneous matches
  */
 
-import { MatchAttempt } from '../../shared/types';
+import { MatchAttempt, SoCloseEntry } from '../../shared/types';
 import {
   TIMING,
   GAME,
@@ -18,11 +18,27 @@ import {
 import type { StateManager } from './StateManager';
 import type { BroadcastService } from './BroadcastService';
 
+/** Callback when close-call capture window closes */
+export type CloseCallWindowClosedCallback = (hasCloseCalls: boolean) => void;
+
 export class ArbitrationService {
   private pendingArbitration: PendingArbitration | null = null;
 
   /** Callback when a winner is determined */
   onWinnerDetermined: WinnerCallback | null = null;
+
+  /** Callback when close-call capture window closes */
+  onCloseCallWindowClosed: CloseCallWindowClosedCallback | null = null;
+
+  // ============================================
+  // CLOSE-CALL CAPTURE STATE
+  // ============================================
+
+  /** Whether we're currently capturing close-call attempts */
+  private closeCallCaptureActive: boolean = false;
+
+  /** Timeout for closing the close-call capture window */
+  private closeCallCaptureTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
     private state: StateManager,
@@ -198,6 +214,12 @@ export class ArbitrationService {
 
     const winner = attempts[0];
 
+    // Store winner timestamp for close-call delta calculations
+    this.state.winnerTimestamp = winner.serverTimestamp;
+
+    // Start close-call capture window (2 seconds)
+    this.startCloseCallCapture();
+
     // Notify via callback
     if (this.onWinnerDetermined) {
       this.onWinnerDetermined(winner.playerId, winner.symbolId);
@@ -220,5 +242,117 @@ export class ArbitrationService {
   hasPendingArbitration(): boolean {
     return this.pendingArbitration !== null &&
            this.pendingArbitration.roundNumber === this.state.roundNumber;
+  }
+
+  // ============================================
+  // CLOSE-CALL CAPTURE
+  // ============================================
+
+  /**
+   * Start the close-call capture window (2 seconds after winner)
+   */
+  private startCloseCallCapture(): void {
+    this.closeCallCaptureActive = true;
+    this.state.soCloseEntries = [];
+
+    this.closeCallCaptureTimeout = setTimeout(() => {
+      this.closeCallCaptureActive = false;
+      this.closeCallCaptureTimeout = null;
+
+      // Notify that capture window is closed
+      if (this.onCloseCallWindowClosed) {
+        this.onCloseCallWindowClosed(this.state.soCloseEntries.length > 0);
+      }
+    }, TIMING.ROUND_TRANSITION_DELAY_MS);
+  }
+
+  /**
+   * Check if close-call capture is currently active
+   */
+  isCloseCallCaptureActive(): boolean {
+    return this.closeCallCaptureActive;
+  }
+
+  /**
+   * Process a close-call attempt during the capture window
+   * @returns true if the attempt was recorded, false if ignored
+   */
+  processCloseCallAttempt(
+    playerId: string,
+    playerName: string,
+    serverTimestamp: number
+  ): boolean {
+    if (!this.closeCallCaptureActive || !this.state.winnerTimestamp) {
+      return false;
+    }
+
+    // Calculate delta from winner
+    const deltaMs = serverTimestamp - this.state.winnerTimestamp;
+
+    // Only capture if within the window and positive delta
+    if (deltaMs <= 0 || deltaMs > TIMING.ROUND_TRANSITION_DELAY_MS) {
+      return false;
+    }
+
+    // Check for duplicate (same player already recorded)
+    if (this.state.soCloseEntries.some(e => e.playerId === playerId)) {
+      return false;
+    }
+
+    // Add entry
+    const entry: SoCloseEntry = {
+      playerId,
+      playerName,
+      deltaMs,
+    };
+
+    this.state.soCloseEntries.push(entry);
+
+    // Keep sorted by deltaMs
+    this.state.soCloseEntries.sort((a, b) => a.deltaMs - b.deltaMs);
+
+    return true;
+  }
+
+  /**
+   * Cancel the close-call capture window
+   */
+  cancelCloseCallCapture(): void {
+    if (this.closeCallCaptureTimeout) {
+      clearTimeout(this.closeCallCaptureTimeout);
+      this.closeCallCaptureTimeout = null;
+    }
+    this.closeCallCaptureActive = false;
+  }
+
+  /**
+   * Validate a match against the previous round's cards (for close-call validation)
+   * Used during ROUND_END phase when cards have already moved
+   */
+  validateCloseCallMatch(
+    playerId: string,
+    symbolId: number
+  ): { valid: true } | { valid: false; reason: string } {
+    // Get previous player top card
+    const previousPlayerCard = this.state.previousPlayerTopCards.get(playerId);
+    if (!previousPlayerCard) {
+      return { valid: false, reason: 'No previous card for player' };
+    }
+
+    // Get previous center card
+    const previousCenterCard = this.state.previousCenterCard;
+    if (!previousCenterCard) {
+      return { valid: false, reason: 'No previous center card' };
+    }
+
+    // Check if symbol is on both cards
+    const inPlayerHand = previousPlayerCard.symbols.some(s => s.id === symbolId);
+    const inCenter = previousCenterCard.symbols.some(s => s.id === symbolId);
+
+    if (!inPlayerHand || !inCenter) {
+      return { valid: false, reason: 'Symbol not on both previous cards' };
+    }
+
+    return { valid: true };
   }
 }

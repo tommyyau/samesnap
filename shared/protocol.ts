@@ -1,4 +1,4 @@
-import { CardData, ClientRoomState, MultiplayerGameConfig, ClientPlayer } from './types';
+import { CardData, ClientRoomState, MultiplayerGameConfig, ClientPlayer, SoCloseEntry } from './types';
 
 // ============================================
 // CLIENT -> SERVER MESSAGES
@@ -38,7 +38,8 @@ export type ServerMessage =
   | { type: 'you_are_host'; payload: Record<string, never> }
   | { type: 'play_again_ack'; payload: { playerId: string } }  // Acknowledge player wants rematch
   | { type: 'solo_rejoin_boot'; payload: { message: string } }  // Only one player rejoined, booting them
-  | { type: 'room_reset'; payload: Record<string, never> };  // Room has been reset for new game
+  | { type: 'room_reset'; payload: Record<string, never> }  // Room has been reset for new game
+  | { type: 'so_close_reveal'; payload: { entries: SoCloseEntry[] } };  // Show "So Close" leaderboard
 
 // ============================================
 // ERROR CODES

@@ -46,6 +46,13 @@ export interface MatchAttempt {
   isValid: boolean;
 }
 
+/** A player who almost won the round - made a valid match attempt shortly after the winner */
+export interface SoCloseEntry {
+  playerId: string;
+  playerName: string;
+  deltaMs: number;  // Time behind winner in milliseconds
+}
+
 export interface MultiplayerGameConfig {
   cardLayout: CardLayout;
   cardSetId: string;
@@ -74,4 +81,6 @@ export interface ClientRoomState {
   gameEndReason?: 'stack_emptied' | 'last_player_standing'; // Why the game ended
   rejoinWindowEndsAt?: number; // Timestamp when rejoin window ends (10s after game_over)
   playersWantRematch?: string[]; // IDs of players who clicked "Play Again"
+  soCloseEntries?: SoCloseEntry[]; // Players who almost won (for "So Close" leaderboard)
+  showSoCloseLeaderboard?: boolean; // True when leaderboard should be displayed
 }

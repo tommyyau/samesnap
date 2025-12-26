@@ -25,6 +25,7 @@ export type {
   MatchAttempt,
   MultiplayerGameConfig,
   ClientRoomState,
+  SoCloseEntry,
 } from './multiplayer';
 
 export {

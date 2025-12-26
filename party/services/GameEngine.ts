@@ -44,6 +44,11 @@ export class GameEngine {
     this.arbitration.onWinnerDetermined = (winnerId, symbolId) => {
       this.processRoundWin(winnerId, symbolId);
     };
+
+    // Wire up close-call window closed callback
+    this.arbitration.onCloseCallWindowClosed = (hasCloseCalls) => {
+      this.handleCloseCallWindowClosed(hasCloseCalls);
+    };
   }
 
   // ============================================
@@ -249,11 +254,30 @@ export class GameEngine {
       return;
     }
 
-    // Check game state
-    if (this.state.phase !== RoomPhase.PLAYING) return;
+    // Check game state - accept both PLAYING and ROUND_END (for close-call capture)
+    if (this.state.phase !== RoomPhase.PLAYING && this.state.phase !== RoomPhase.ROUND_END) {
+      return;
+    }
 
     const player = this.state.players.get(playerId);
     if (!player || player.cardStack.length === 0) return;
+
+    // During ROUND_END, process as close-call attempt
+    if (this.state.phase === RoomPhase.ROUND_END) {
+      // Skip if this is the winner (they already won)
+      if (playerId === this.state.roundWinnerId) return;
+
+      // Validate against previous round's cards
+      const validation = this.arbitration.validateCloseCallMatch(playerId, symbolId);
+      if (validation.valid) {
+        // Record close-call attempt
+        this.arbitration.processCloseCallAttempt(playerId, player.name, serverTimestamp);
+      }
+      // No penalty during ROUND_END - just silently ignore invalid attempts
+      return;
+    }
+
+    // Normal PLAYING phase logic below
 
     // Check penalty
     if (this.arbitration.isPenalized(playerId)) {
@@ -286,6 +310,22 @@ export class GameEngine {
     const winner = this.state.players.get(winnerId);
     if (!winner) return;
 
+    // Store previous cards BEFORE moving (for close-call validation)
+    this.state.previousCenterCard = this.state.centerCard;
+    this.state.previousPlayerTopCards.clear();
+    this.state.players.forEach((player, playerId) => {
+      if (player.cardStack.length > 0) {
+        const topCardId = player.cardStack[0];
+        const card = this.state.getCardById(topCardId);
+        if (card) {
+          this.state.previousPlayerTopCards.set(playerId, card);
+        }
+      }
+    });
+
+    // Clear previous close-call entries
+    this.state.soCloseEntries = [];
+
     this.state.phase = RoomPhase.ROUND_END;
     this.state.roundWinnerId = winnerId;
     this.state.roundMatchedSymbolId = symbolId;
@@ -305,12 +345,33 @@ export class GameEngine {
 
     // Check for game over
     if (winner.cardStack.length === 0) {
+      // Cancel close-call capture since game is over
+      this.arbitration.cancelCloseCallCapture();
       this.endGame('stack_emptied', winnerId, winner.name);
       return;
     }
 
-    // Schedule next round
-    this.timers.scheduleNextRound(() => this.nextRound());
+    // DON'T schedule next round here - wait for close-call window to close
+    // The callback onCloseCallWindowClosed will handle the timing
+  }
+
+  /**
+   * Handle close-call window closing (called by ArbitrationService)
+   * Decides whether to show leaderboard (add 2s) or go straight to next round
+   */
+  private handleCloseCallWindowClosed(hasCloseCalls: boolean): void {
+    if (this.state.phase !== RoomPhase.ROUND_END) return;
+
+    if (hasCloseCalls) {
+      // Broadcast the "So Close" reveal with all entries
+      this.broadcast.broadcastSoCloseReveal(this.state.soCloseEntries);
+
+      // Wait 2 more seconds for leaderboard display, then next round
+      this.timers.scheduleNextRound(() => this.nextRound());
+    } else {
+      // No close calls - go straight to next round
+      this.nextRound();
+    }
   }
 
   /**
@@ -319,6 +380,12 @@ export class GameEngine {
   private nextRound(): void {
     if (this.state.phase !== RoomPhase.ROUND_END) return;
     if (!this.state.centerCard) return;
+
+    // Clear close-call state
+    this.state.soCloseEntries = [];
+    this.state.previousCenterCard = null;
+    this.state.previousPlayerTopCards.clear();
+    this.state.winnerTimestamp = null;
 
     this.state.roundNumber++;
     this.state.phase = RoomPhase.PLAYING;
@@ -368,6 +435,7 @@ export class GameEngine {
     // Clear pending timers
     this.timers.clearRoundEnd();
     this.arbitration.cancelPendingArbitration();
+    this.arbitration.cancelCloseCallCapture();
     this.arbitration.clearAllPenalties();
 
     this.state.phase = RoomPhase.GAME_OVER;

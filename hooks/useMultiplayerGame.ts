@@ -316,6 +316,9 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
             yourCard: message.payload.yourCard,
             roundWinnerId: null,
             roundMatchedSymbolId: null,
+            // Clear close-call state for new round
+            soCloseEntries: undefined,
+            showSoCloseLeaderboard: false,
             players: updatedPlayers,
           };
         });
@@ -328,12 +331,23 @@ export function useMultiplayerGame({ roomCode, playerName, onError, onKicked, on
           roundWinnerId: message.payload.winnerId,
           roundWinnerName: message.payload.winnerName,
           roundMatchedSymbolId: message.payload.matchedSymbolId,
+          // Clear close-call entries for fresh capture
+          soCloseEntries: undefined,
+          showSoCloseLeaderboard: false,
           // Update winner's cards remaining (decrement by 1)
           players: prev.players.map(p =>
             p.id === message.payload.winnerId
               ? { ...p, cardsRemaining: message.payload.winnerCardsRemaining }
               : p
           )
+        } : null);
+        break;
+
+      case 'so_close_reveal':
+        setRoomState(prev => prev ? {
+          ...prev,
+          soCloseEntries: message.payload.entries,
+          showSoCloseLeaderboard: true,
         } : null);
         break;
 

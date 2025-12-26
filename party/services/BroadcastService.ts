@@ -14,6 +14,7 @@ import {
   ServerPlayer,
   ClientPlayer,
   ClientRoomState,
+  SoCloseEntry,
 } from '../../shared/types';
 import { ServerMessage, ERROR_CODES } from '../../shared/protocol';
 import type { StateManager } from './StateManager';
@@ -183,6 +184,9 @@ export class BroadcastService {
       playersWantRematch: this.state.playersWantRematch.size > 0
         ? Array.from(this.state.playersWantRematch)
         : undefined,
+      soCloseEntries: this.state.phase === RoomPhase.ROUND_END && this.state.soCloseEntries.length > 0
+        ? this.state.soCloseEntries
+        : undefined,
     };
   }
 
@@ -297,5 +301,12 @@ export class BroadcastService {
    */
   broadcastPlayAgainAck(playerId: string): void {
     this.broadcastToAll({ type: 'play_again_ack', payload: { playerId } });
+  }
+
+  /**
+   * Broadcast "So Close" reveal - shows who almost won the round
+   */
+  broadcastSoCloseReveal(entries: SoCloseEntry[]): void {
+    this.broadcastToAll({ type: 'so_close_reveal', payload: { entries } });
   }
 }

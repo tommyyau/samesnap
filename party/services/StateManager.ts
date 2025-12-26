@@ -13,6 +13,7 @@ import {
   MultiplayerGameConfig,
   CardLayout,
   GameDuration,
+  SoCloseEntry,
 } from '../../shared/types';
 import { DEFAULT_CARD_SET_ID } from '../../shared/cardSets';
 import {
@@ -64,6 +65,22 @@ export class StateManager {
 
   /** Symbol that was matched in current/last round */
   roundMatchedSymbolId: number | null = null;
+
+  // ============================================
+  // "SO CLOSE" STATE (close-call capture)
+  // ============================================
+
+  /** Close call entries for the current round (valid attempts after winner) */
+  soCloseEntries: SoCloseEntry[] = [];
+
+  /** Previous center card for close-call validation during ROUND_END */
+  previousCenterCard: CardData | null = null;
+
+  /** Previous player top cards for close-call validation (playerId -> CardData) */
+  previousPlayerTopCards: Map<string, CardData> = new Map();
+
+  /** Winner's timestamp for calculating close-call deltas */
+  winnerTimestamp: number | null = null;
 
   // ============================================
   // PENALTY & RATE LIMITING
@@ -194,6 +211,12 @@ export class StateManager {
     this.playersWantRematch.clear();
     this.rejoinWindowEndsAt = null;
     this.currentCountdown = null;
+
+    // Clear "So Close" state
+    this.soCloseEntries = [];
+    this.previousCenterCard = null;
+    this.previousPlayerTopCards.clear();
+    this.winnerTimestamp = null;
 
     // Reset player state for new game
     this.players.forEach(player => {

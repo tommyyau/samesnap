@@ -13,6 +13,7 @@ import { useGameAudio } from '../../hooks/useGameAudio';
 import { useImagePreloader } from '../../hooks/useImagePreloader';
 import { VictoryCelebration } from '../common/VictoryCelebration';
 import { GameOverScoreboard, PlayerScore } from '../common/GameOverScoreboard';
+import { SoCloseLeaderboard } from './SoCloseLeaderboard';
 
 interface MultiplayerGameProps {
   roomCode: string;
@@ -335,12 +336,24 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       )}
 
       <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative safe-all">
-        {/* WIN/LOSE OVERLAY */}
+        {/* WIN/LOSE OVERLAY - transitions to "So Close" leaderboard if there are close calls */}
       {isAnimating && (
-        <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-300 ${
-          isYouWinner ? 'bg-green-500/90' : 'bg-slate-900/70'
+        <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-500 ${
+          roomState?.showSoCloseLeaderboard
+            ? 'bg-slate-900/85'
+            : isYouWinner
+              ? 'bg-green-500/90'
+              : 'bg-slate-900/70'
         }`}>
-          {isYouWinner ? (
+          {roomState?.showSoCloseLeaderboard && roomState?.soCloseEntries && roomState.soCloseEntries.length > 0 ? (
+            // SO CLOSE LEADERBOARD - shows after winner display
+            <SoCloseLeaderboard
+              winnerId={roomState.roundWinnerId!}
+              winnerName={roomState.roundWinnerName!}
+              soCloseEntries={roomState.soCloseEntries}
+              currentPlayerId={you?.id}
+            />
+          ) : isYouWinner ? (
             // YOU WON - Big celebration
             <div className="text-center animate-bounce">
               <div className="text-6xl font-black text-white drop-shadow-lg">YOU GOT IT!</div>
