@@ -31,6 +31,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   const [showVictoryCelebration, setShowVictoryCelebration] = useState(false);
   const [victoryCelebrationShown, setVictoryCelebrationShown] = useState(false);
   const [toast, setToast] = useState<{ message: string; icon?: string } | null>(null);
+  // Non-winners get 1.5s delay before seeing overlay (so they can still click for "So Close")
+  const [showRoundEndOverlay, setShowRoundEndOverlay] = useState(false);
 
   // Responsive sizing - opponent row is taller than single-player bot row
   const { cardSize } = useResponsiveCardSize({
@@ -124,6 +126,28 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
     }
   }, [roomState?.phase, roomState?.roundWinnerId, roomState?.players, playMatch]);
 
+  // Handle round-end overlay timing: winner sees immediately, non-winners get 1.5s delay
+  useEffect(() => {
+    if (roomState?.phase === RoomPhase.ROUND_END && roomState.roundWinnerId) {
+      const you = roomState.players.find(p => p.isYou);
+      const isYouWinner = you?.id === roomState.roundWinnerId;
+
+      if (isYouWinner) {
+        // Winner sees overlay immediately
+        setShowRoundEndOverlay(true);
+      } else {
+        // Non-winner: delay overlay by 1.5s so they can still click for close-call capture
+        const timer = setTimeout(() => {
+          setShowRoundEndOverlay(true);
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    } else {
+      // Reset when phase changes (e.g., new round starts)
+      setShowRoundEndOverlay(false);
+    }
+  }, [roomState?.phase, roomState?.roundWinnerId, roomState?.players]);
+
   // Penalty countdown
   useEffect(() => {
     if (roomState?.penaltyUntil && roomState.penaltyUntil > Date.now()) {
@@ -183,8 +207,11 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
   }, [roomState?.phase, victoryCelebrationShown, playVictory]);
 
   const handleSymbolClick = (symbol: SymbolItem) => {
-    if (roomState?.phase !== RoomPhase.PLAYING) return;
-    if (roomState.penaltyUntil && Date.now() < roomState.penaltyUntil) return;
+    // Allow clicks during PLAYING phase, or during ROUND_END if overlay not shown yet (close-call window)
+    const isPlaying = roomState?.phase === RoomPhase.PLAYING;
+    const isCloseCallWindow = roomState?.phase === RoomPhase.ROUND_END && !showRoundEndOverlay;
+    if (!isPlaying && !isCloseCallWindow) return;
+    if (roomState?.penaltyUntil && Date.now() < roomState.penaltyUntil) return;
     // Unlock audio on first click (Safari requires user gesture)
     unlockAudio();
     attemptMatch(symbol.id);
@@ -336,8 +363,8 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       )}
 
       <div className="flex flex-col h-screen bg-slate-100 overflow-hidden relative safe-all">
-        {/* WIN/LOSE OVERLAY - transitions to "So Close" leaderboard if there are close calls */}
-      {isAnimating && (
+        {/* WIN/LOSE OVERLAY - Winner sees immediately, non-winners get 1.5s delay to click for "So Close" */}
+      {(showRoundEndOverlay || roomState?.showSoCloseLeaderboard) && (
         <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-500 ${
           roomState?.showSoCloseLeaderboard
             ? 'bg-slate-900/85'
@@ -346,7 +373,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               : 'bg-slate-900/70'
         }`}>
           {roomState?.showSoCloseLeaderboard && roomState?.soCloseEntries && roomState.soCloseEntries.length > 0 ? (
-            // SO CLOSE LEADERBOARD - shows after winner display
+            // SO CLOSE LEADERBOARD - shows after close-call capture window
             <SoCloseLeaderboard
               winnerId={roomState.roundWinnerId!}
               winnerName={roomState.roundWinnerName!}
@@ -359,7 +386,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               <div className="text-6xl font-black text-white drop-shadow-lg">YOU GOT IT!</div>
             </div>
           ) : (
-            // OPPONENT WON - Smaller notification
+            // OPPONENT WON - Smaller notification (after 1.5s delay)
             <div className="text-center">
               <div className="text-6xl mb-4">😮</div>
               <div className="text-4xl font-black text-white drop-shadow-lg">
@@ -425,7 +452,7 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
                 size={cardSize}
                 layoutMode={roomState.config?.cardLayout || CardLayout.CHAOTIC}
                 onClickSymbol={handleSymbolClick}
-                disabled={isPenaltyActive || isAnimating}
+                disabled={isPenaltyActive || showRoundEndOverlay}
                 highlightError={isPenaltyActive}
                 highlightSymbolId={isAnimating ? roomState.roundMatchedSymbolId : null}
                 className="border-indigo-500 bg-indigo-50 shadow-indigo-200"

@@ -28,8 +28,10 @@ export const TIMING = {
   WAITING_GRACE_PERIOD_MS: 300000,
   /** Countdown duration in seconds */
   COUNTDOWN_SECONDS: 5,
-  /** Delay between round end and next round */
+  /** Delay between round end and next round (used for leaderboard display) */
   ROUND_TRANSITION_DELAY_MS: 2000,
+  /** Window to capture close-call attempts after winner determined (non-winners can still click) */
+  CLOSE_CALL_CAPTURE_MS: 1500,
 } as const;
 
 // ============================================

@@ -249,7 +249,8 @@ export class ArbitrationService {
   // ============================================
 
   /**
-   * Start the close-call capture window (2 seconds after winner)
+   * Start the close-call capture window (1.5 seconds after winner)
+   * Non-winners can still click during this window before overlay appears
    */
   private startCloseCallCapture(): void {
     this.closeCallCaptureActive = true;
@@ -263,7 +264,7 @@ export class ArbitrationService {
       if (this.onCloseCallWindowClosed) {
         this.onCloseCallWindowClosed(this.state.soCloseEntries.length > 0);
       }
-    }, TIMING.ROUND_TRANSITION_DELAY_MS);
+    }, TIMING.CLOSE_CALL_CAPTURE_MS);
   }
 
   /**
@@ -290,7 +291,7 @@ export class ArbitrationService {
     const deltaMs = serverTimestamp - this.state.winnerTimestamp;
 
     // Only capture if within the window and positive delta
-    if (deltaMs <= 0 || deltaMs > TIMING.ROUND_TRANSITION_DELAY_MS) {
+    if (deltaMs <= 0 || deltaMs > TIMING.CLOSE_CALL_CAPTURE_MS) {
       return false;
     }
 
