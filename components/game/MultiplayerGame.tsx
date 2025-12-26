@@ -369,10 +369,10 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
       {(showRoundEndOverlay || roomState?.showSoCloseLeaderboard) && (
         <div className={`absolute inset-0 z-50 flex items-center justify-center transition-all duration-500 ${
           roomState?.showSoCloseLeaderboard
-            ? 'bg-slate-900/85'
+            ? 'bg-slate-200/90 backdrop-blur-sm'
             : isYouWinner
               ? 'bg-green-500/90'
-              : 'bg-slate-900/70'
+              : 'bg-slate-300/80 backdrop-blur-sm'
         }`}>
           {roomState?.showSoCloseLeaderboard && roomState?.soCloseEntries && roomState.soCloseEntries.length > 0 ? (
             // SO CLOSE LEADERBOARD - shows after close-call capture window
@@ -389,12 +389,12 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
             </div>
           ) : (
             // OPPONENT WON - Smaller notification (after 1.5s delay)
-            <div className="text-center">
+            <div className="text-center bg-white rounded-3xl p-8 shadow-2xl border-b-4 border-indigo-200">
               <div className="text-6xl mb-4">😮</div>
-              <div className="text-4xl font-black text-white drop-shadow-lg">
+              <div className="text-3xl sm:text-4xl font-black text-slate-800">
                 {roomState.roundWinnerName} got it!
               </div>
-              <div className="text-xl text-gray-300 mt-4">Be faster next time...</div>
+              <div className="text-lg text-slate-500 mt-3">Be faster next time...</div>
             </div>
           )}
         </div>

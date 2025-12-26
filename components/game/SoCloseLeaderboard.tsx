@@ -58,8 +58,8 @@ export function SoCloseLeaderboard({
   const currentPlayerIsInList = soCloseEntries.some(e => e.playerId === currentPlayerId);
 
   return (
-    <div className="bg-black/60 backdrop-blur-sm rounded-2xl p-4 sm:p-6 min-w-[280px] max-w-[400px] shadow-2xl">
-      <h2 className="text-xl sm:text-2xl font-black text-white text-center mb-4">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 min-w-[280px] max-w-[400px] shadow-2xl border-b-4 border-indigo-200">
+      <h2 className="text-xl sm:text-2xl font-black text-slate-800 text-center mb-4">
         So Close!
       </h2>
 
@@ -69,13 +69,13 @@ export function SoCloseLeaderboard({
           <div
             className={`flex items-center gap-3 py-2 px-4 rounded-xl transition-all duration-300 animate-fade-in ${
               isCurrentPlayer(winnerId)
-                ? 'bg-green-500/40 ring-2 ring-green-400'
-                : 'bg-white/10'
+                ? 'bg-green-100 ring-2 ring-green-400'
+                : 'bg-green-50'
             }`}
           >
             <span className="text-3xl">{emojiAssignments.winnerEmoji}</span>
-            <span className="text-white font-bold flex-1 truncate">{winnerName}</span>
-            <span className="text-green-400 font-mono text-sm font-bold">WINNER</span>
+            <span className="text-slate-800 font-bold flex-1 truncate">{winnerName}</span>
+            <span className="text-green-600 font-mono text-sm font-bold">WINNER</span>
           </div>
         )}
 
@@ -86,15 +86,15 @@ export function SoCloseLeaderboard({
               key={entry.playerId}
               className={`flex items-center gap-3 py-2 px-4 rounded-xl transition-all duration-300 animate-fade-in ${
                 isCurrentPlayer(entry.playerId)
-                  ? 'bg-amber-500/40 ring-2 ring-amber-400'
-                  : 'bg-white/5'
+                  ? 'bg-amber-100 ring-2 ring-amber-400'
+                  : 'bg-slate-50'
               }`}
             >
               <span className="text-2xl">{emojiAssignments.loserEmojis[index]}</span>
-              <span className="text-white/90 font-medium flex-1 truncate">
+              <span className="text-slate-700 font-medium flex-1 truncate">
                 {entry.playerName}
               </span>
-              <span className="text-amber-400 font-mono text-sm">
+              <span className="text-amber-600 font-mono text-sm font-semibold">
                 {formatDelta(entry.deltaMs)}
               </span>
             </div>
@@ -104,7 +104,7 @@ export function SoCloseLeaderboard({
 
       {/* Encouragement message if current player was close */}
       {currentPlayerIsInList && visibleCount > soCloseEntries.length && (
-        <div className="text-center text-amber-300 text-sm mt-4 animate-pulse">
+        <div className="text-center text-amber-600 text-sm mt-4 animate-pulse font-medium">
           Almost had it! Be faster next time!
         </div>
       )}
