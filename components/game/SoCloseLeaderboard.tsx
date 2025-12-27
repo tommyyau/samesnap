@@ -60,7 +60,7 @@ export function SoCloseLeaderboard({
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 min-w-[280px] max-w-[400px] shadow-2xl border-b-4 border-indigo-200">
       <h2 className="text-xl sm:text-2xl font-black text-slate-800 text-center mb-4">
-        So Close!
+        {soCloseEntries.length > 0 ? 'Oh - So Close!' : 'Fastest Player'}
       </h2>
 
       <div className="space-y-2">
