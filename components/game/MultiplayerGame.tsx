@@ -374,12 +374,12 @@ const MultiplayerGame: React.FC<MultiplayerGameProps> = ({ onExit, multiplayerHo
               ? 'bg-green-500/90'
               : 'bg-slate-300/80 backdrop-blur-sm'
         }`}>
-          {roomState?.showSoCloseLeaderboard && roomState?.soCloseEntries && roomState.soCloseEntries.length > 0 ? (
-            // SO CLOSE LEADERBOARD - shows after close-call capture window
+          {roomState?.showSoCloseLeaderboard ? (
+            // LEADERBOARD - shows after close-call capture window (always shows winner, plus any close calls)
             <SoCloseLeaderboard
               winnerId={roomState.roundWinnerId!}
               winnerName={roomState.roundWinnerName!}
-              soCloseEntries={roomState.soCloseEntries}
+              soCloseEntries={roomState.soCloseEntries || []}
               currentPlayerId={you?.id}
             />
           ) : isYouWinner ? (
