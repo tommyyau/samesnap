@@ -357,21 +357,17 @@ export class GameEngine {
 
   /**
    * Handle close-call window closing (called by ArbitrationService)
-   * Decides whether to show leaderboard (add 2s) or go straight to next round
+   * Always shows leaderboard (with or without close-call entries)
    */
-  private handleCloseCallWindowClosed(hasCloseCalls: boolean): void {
+  private handleCloseCallWindowClosed(_hasCloseCalls: boolean): void {
     if (this.state.phase !== RoomPhase.ROUND_END) return;
 
-    if (hasCloseCalls) {
-      // Broadcast the "So Close" reveal with all entries
-      this.broadcast.broadcastSoCloseReveal(this.state.soCloseEntries);
+    // Always broadcast the "So Close" reveal (even with empty entries)
+    // This tells clients to show the leaderboard with at least the winner
+    this.broadcast.broadcastSoCloseReveal(this.state.soCloseEntries);
 
-      // Wait 2 more seconds for leaderboard display, then next round
-      this.timers.scheduleNextRound(() => this.nextRound());
-    } else {
-      // No close calls - go straight to next round
-      this.nextRound();
-    }
+    // Always wait for leaderboard display, then next round
+    this.timers.scheduleNextRound(() => this.nextRound());
   }
 
   /**

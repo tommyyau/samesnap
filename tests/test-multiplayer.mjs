@@ -570,7 +570,7 @@ async function runGameFlowTests() {
       throw new Error(`Expected winner to have ${expectedCardsPerPlayer - 1} cards, got ${winner.payload.winnerCardsRemaining}`);
     }
 
-    const secondRound = await waitForMessage(host, 'round_start', 5000);
+    const secondRound = await waitForMessage(host, 'round_start', 6000);
     // After winning, host should have 1 less card
     if (secondRound.payload.yourCardsRemaining !== expectedCardsPerPlayer - 1) {
       throw new Error(`Expected ${expectedCardsPerPlayer - 1} cards after winning, got ${secondRound.payload.yourCardsRemaining}`);
@@ -1217,7 +1217,7 @@ async function runLastPlayerStandingTests() {
     }));
 
     await waitForMessage(host, 'round_winner', 5000);
-    const round2 = await waitForMessage(host, 'round_start', 5000);
+    const round2 = await waitForMessage(host, 'round_start', 6000);
 
     // Host wins round 2
     const match2 = findMatchingSymbol(round2.payload.yourCard, round2.payload.centerCard);
@@ -1229,7 +1229,7 @@ async function runLastPlayerStandingTests() {
     }));
 
     await waitForMessage(host, 'round_winner', 5000);
-    const round3 = await waitForMessage(host, 'round_start', 5000);
+    const round3 = await waitForMessage(host, 'round_start', 6000);
 
     // Host should have 2 fewer cards after winning 2 rounds
     if (round3.payload.yourCardsRemaining !== initialCardsRemaining - 2) {
@@ -2298,12 +2298,12 @@ async function runPlayAgainRoomResetTests() {
 
       // Wait for next round
       try {
-        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        const nextRound = await waitForMessage(host, 'round_start', 6000);
         yourCard = nextRound.payload.yourCard;
         centerCard = nextRound.payload.centerCard;
       } catch (e) {
         // Maybe game_over
-        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        const over = await waitForAnyMessage(host, ['game_over'], 6000);
         if (over.type === 'game_over') gameOver = true;
       }
     }
@@ -2382,11 +2382,11 @@ async function runPlayAgainRoomResetTests() {
       }
 
       try {
-        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        const nextRound = await waitForMessage(host, 'round_start', 6000);
         yourCard = nextRound.payload.yourCard;
         centerCard = nextRound.payload.centerCard;
       } catch (e) {
-        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        const over = await waitForAnyMessage(host, ['game_over'], 6000);
         if (over.type === 'game_over') gameOver = true;
       }
     }
@@ -2453,11 +2453,11 @@ async function runPlayAgainRoomResetTests() {
       }
 
       try {
-        const nextRound = await waitForMessage(host, 'round_start', 3000);
+        const nextRound = await waitForMessage(host, 'round_start', 6000);
         yourCard = nextRound.payload.yourCard;
         centerCard = nextRound.payload.centerCard;
       } catch (e) {
-        const over = await waitForAnyMessage(host, ['game_over'], 2000);
+        const over = await waitForAnyMessage(host, ['game_over'], 6000);
         if (over.type === 'game_over') gameOver = true;
       }
     }
