@@ -5,7 +5,7 @@ import { SoCloseEntry } from '../../shared/types';
 const HAPPY_EMOJIS = ['😄', '🤩', '😊', '🥳'];
 
 // Sad/angry emojis for everyone else (randomly assigned)
-const SAD_EMOJIS = ['😢', '😤', '😭', '😠', '😩', '🥺', '😡', '😿', '💢'];
+const SAD_EMOJIS = ['😢', '😤', '😭', '😠', '😩', '☹️', '😡', '😞', '😫'];
 
 interface SoCloseLeaderboardProps {
   winnerId: string;
