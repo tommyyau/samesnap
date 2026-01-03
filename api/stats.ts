@@ -68,11 +68,12 @@ async function getUserId(req: VercelRequest): Promise<string | null> {
   }
 
   try {
-    // Allow localhost, production, and all Vercel preview deployments
+    // Allow localhost, production, custom domain, and all Vercel preview deployments
     const authorizedParties = [
       'http://localhost:3000',
       'http://localhost:3001',
       'https://samesnap.vercel.app',
+      'https://samesnap.tommyyau.com',
     ];
 
     // Add the request origin if it's a Vercel preview deployment
