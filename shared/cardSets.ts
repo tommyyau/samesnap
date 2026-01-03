@@ -176,6 +176,76 @@ export const CARD_SET_GREAT_OUTDOORS: CardSet = {
   isBuiltIn: true,
 };
 
+// Avatar Set: 57 chibi avatar PNGs
+const AVATAR_IMAGES = [
+  'chibi-1767442108012.png',
+  'chibi-1767442171703.png',
+  'chibi-1767442190636.png',
+  'chibi-1767442248887.png',
+  'chibi-1767442382151.png',
+  'chibi-1767442427609.png',
+  'chibi-1767442520116.png',
+  'chibi-1767442556909.png',
+  'chibi-1767442656916.png',
+  'chibi-1767442686362.png',
+  'chibi-1767442739417.png',
+  'chibi-1767442801168.png',
+  'chibi-1767442941669.png',
+  'chibi-1767442983258.png',
+  'chibi-1767443049374.png',
+  'chibi-1767443080407.png',
+  'chibi-1767443102189.png',
+  'chibi-1767443122855.png',
+  'chibi-1767443161230.png',
+  'chibi-1767443225087.png',
+  'chibi-1767443237829.png',
+  'chibi-1767443298352.png',
+  'chibi-1767443368701.png',
+  'chibi-1767443389126.png',
+  'chibi-1767443411535.png',
+  'chibi-1767443430534.png',
+  'chibi-1767443450831.png',
+  'chibi-1767443476873.png',
+  'chibi-1767443502440.png',
+  'chibi-1767443520922.png',
+  'chibi-1767443540079.png',
+  'chibi-1767443593080.png',
+  'chibi-1767443626019.png',
+  'chibi-1767443653827.png',
+  'chibi-1767443847144.png',
+  'chibi-1767444072186.png',
+  'chibi-1767444157046.png',
+  'chibi-1767444176996.png',
+  'chibi-1767444196109.png',
+  'chibi-1767444216441.png',
+  'chibi-1767444240507.png',
+  'chibi-1767444268692.png',
+  'chibi-1767444288204.png',
+  'chibi-1767444319236.png',
+  'chibi-1767444346675.png',
+  'chibi-1767444367749.png',
+  'chibi-1767444395173.png',
+  'chibi-1767444424589.png',
+  'chibi-1767444443076.png',
+  'chibi-1767444473276.png',
+  'chibi-1767444497372.png',
+  'chibi-1767444563363.png',
+  'chibi-1767444584438.png',
+  'chibi-1767444607295.png',
+  'chibi-1767444632488.png',
+  'chibi-1767456996637.png',
+  'chibi-1767457251914.png',
+];
+export const SYMBOLS_AVATAR = createPngSymbols('avatar', AVATAR_IMAGES);
+
+export const CARD_SET_AVATAR: CardSet = {
+  id: 'avatar',
+  name: 'Avatar',
+  description: 'Chibi-style avatar characters',
+  symbols: SYMBOLS_AVATAR,
+  isBuiltIn: true,
+};
+
 // Built-in card sets (non-editable)
 export const BUILT_IN_CARD_SETS: CardSet[] = [
   {
@@ -202,6 +272,7 @@ export const BUILT_IN_CARD_SETS: CardSet[] = [
   CARD_SET_NUMBERS,
   CARD_SET_MARVEL,
   CARD_SET_GREAT_OUTDOORS,
+  CARD_SET_AVATAR,
 ];
 
 // Default card set ID
